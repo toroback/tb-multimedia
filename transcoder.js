@@ -260,8 +260,8 @@ function uploadUserFiles(files, output, transcoderOptions) {
   // console.log('==========================>>>> uploadUserFiles');
   log.trace('uploadUserFiles');
   return new Promise( (resolve, reject) => {
-    let awsStorage  = new app.FileStorage('aws', null, transcoderOptions);
-    let userStorage = new app.FileStorage(output.service);
+    let awsStorage  = new app.Storage('aws', null, transcoderOptions);
+    let userStorage = new app.Storage(output.service);
     if (awsStorage && userStorage) {
       // download each file from aws, then upload to user container,
       // then remove local file (all, one by one)
@@ -326,7 +326,7 @@ function listAWSFiles(job, storage) {
   // console.log('==========================>>>> listAWSFiles');
   log.trace('listAWSFiles');
   return new Promise( (resolve, reject) => {
-    // TODO: cambiar FileStorage para que devuelva la lista de archivos de un path, no de todo el bucket
+    // TODO: cambiar Storage para que devuelva la lista de archivos de un path, no de todo el bucket
     storage.listFiles(transcoderDefaults.outputContainer, job.Job.OutputKeyPrefix)
       .then( (data) => {
         let fileList = data.Contents.map(file => { return file.Key });
@@ -625,7 +625,7 @@ function uploadAWSFile(fileName, transcoderOptions) {
   // console.log('==========================>>>> uploadAWSFile');
   log.trace('uploadAWSFile');
   return new Promise( (resolve, reject) => {
-    let storage  = new app.FileStorage('aws', undefined, transcoderOptions);
+    let storage  = new app.Storage('aws', undefined, transcoderOptions);
     if (storage) {
       let arg = {
         container: transcoderDefaults.inputContainer,
@@ -666,7 +666,7 @@ function downloadUserFile(input) {
         reject(err);
       });
     } else {
-      let storage  = new app.FileStorage(input.service);
+      let storage  = new app.Storage(input.service);
       if (storage) {
         let arg = {
           container: input.container,
@@ -694,20 +694,20 @@ function checkOutputStorage(out) {
   // this is to avoid creating the job and then have no access to output storage
   log.trace('checkOutputStorage');
 
-  // TODO: FileStorage breaks if service is not configured. it should return null, not break!
-  // TODO: FileStorage returns local storage (does it?) if an unhandled service is passed. should return null
-  // TODO: FileStorage has no way to verify RW access. a method should exist for that.
+  // TODO: Storage breaks if service is not configured. it should return null, not break!
+  // TODO: Storage returns local storage (does it?) if an unhandled service is passed. should return null
+  // TODO: Storage has no way to verify RW access. a method should exist for that.
 
-  // TODO: arreglar todo esto aquí abajo... no pude probar bien hasta no arreglar FileStorage
+  // TODO: arreglar todo esto aquí abajo... no pude probar bien hasta no arreglar Storage
   return new Promise( (resolve, reject) => {
-    let storage  = new app.FileStorage(out.service);
+    let storage  = new app.Storage(out.service);
     if (!storage)
       reject(new Error('Service ' + out.service + ' not configured'));
     else {
       // check for container existance at least (there's no way yet to read RW access)
       storage.getContainerInfo({ name: out.container })
         .then( ( ) => resolve(out))
-        .catch( reject );   // TODO: ah ok... FileStorage se rompe si no existe el bucket! (o si se escribe con mayúscula)
+        .catch( reject );   // TODO: ah ok... Storage se rompe si no existe el bucket! (o si se escribe con mayúscula)
     }
   });
 }

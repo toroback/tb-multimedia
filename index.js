@@ -29,9 +29,9 @@ class MultiMedia {
       }
     }
     // check for at least one service setup
-    if ( Object.keys(this.services).length == 0 ) {
-      throw new Error('Multimedia: at least one module needs to be configured.');
-    }
+    // if ( Object.keys(this.services).length == 0 ) {
+    //   throw new Error('Multimedia: at least one module needs to be configured.');
+    // }
   }
 
   // multimedia tb module setup. Must be called before any instance creation. 
@@ -43,7 +43,9 @@ class MultiMedia {
       defaultOptions = _app.multimediaOptions || { };
       log.info('Setup: Multimedia');
       // load routes
+      console.log("Setup: Multimedia")
       require("./routes")(_app);
+      console.log("Multimedia routes setup")
       resolve( );
     });
   }
@@ -68,8 +70,27 @@ class MultiMedia {
       return Promise.reject(new Error('Streaming: Transcoder not configured on readJob'));
   }
 
+
+  editImage(input, output, edit){
+    return new Promise( (resolve, reject) => {
+      let ImageEditor = require('./imageEditor.js');
+      let imageEditor = new ImageEditor(App, input);
+      imageEditor.edit(edit, output)
+        .then(resolve)
+        .catch(reject);
+      // load(input)
+      //   .then(file => modifyImage())
+      //   .then(image => save())
+      //   .then(resolve)
+      //   .catch(reject);
+    });
+  }
   
 }
+
+
+
+
 
 
 module.exports = MultiMedia;
