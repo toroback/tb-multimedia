@@ -42,11 +42,14 @@ class MultiMedia {
       log = _app.log.child({module:'multimedia'});
       defaultOptions = _app.multimediaOptions || { };
       log.info('Setup: Multimedia');
-      // load routes
-      console.log("Setup: Multimedia")
-      require("./routes")(_app);
-      console.log("Multimedia routes setup")
-      resolve( );
+
+      checkGM()
+        .then(res => {
+          // load routes
+          require("./routes")(_app);
+          resolve( );
+        })
+        .catch(reject)
     });
   }
 
@@ -78,18 +81,28 @@ class MultiMedia {
       imageEditor.edit(edit, output)
         .then(resolve)
         .catch(reject);
-      // load(input)
-      //   .then(file => modifyImage())
-      //   .then(image => save())
-      //   .then(resolve)
-      //   .catch(reject);
     });
   }
   
 }
 
-
-
+/**
+ * Comprueba que GM esté instalado
+ * @return {[type]} [description]
+ */
+function checkGM(){
+  return new Promise((resolve, reject)=>{
+    const { exec } = require('child_process');
+    exec('which gm', (err, stdout, stderr) => {
+      if (err) {
+        // node couldn't execute the command
+        return reject(new Error("GM is not installed"));
+      }else{
+        resolve();
+      }
+    });
+  })
+}
 
 
 

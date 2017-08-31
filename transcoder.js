@@ -50,7 +50,7 @@ let transcoderDefaults = {
   outputContainer: 'a2server-transcoder',
   inputPrefix:     'in/',
   outputPrefix:    'out/',
-  localPath:       'fs/'
+  localPath:       'storage/'
 }
 
 class Transcoder {
@@ -260,7 +260,7 @@ function uploadUserFiles(files, output, transcoderOptions) {
   // console.log('==========================>>>> uploadUserFiles');
   log.trace('uploadUserFiles');
   return new Promise( (resolve, reject) => {
-    let awsStorage  = new app.Storage('aws', null, transcoderOptions);
+    let awsStorage  = new app.Storage('aws', transcoderOptions);
     let userStorage = new app.Storage(output.service);
     if (awsStorage && userStorage) {
       // download each file from aws, then upload to user container,
@@ -625,7 +625,7 @@ function uploadAWSFile(fileName, transcoderOptions) {
   // console.log('==========================>>>> uploadAWSFile');
   log.trace('uploadAWSFile');
   return new Promise( (resolve, reject) => {
-    let storage  = new app.Storage('aws', undefined, transcoderOptions);
+    let storage  = new app.Storage('aws', transcoderOptions);
     if (storage) {
       let arg = {
         container: transcoderDefaults.inputContainer,

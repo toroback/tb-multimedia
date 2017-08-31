@@ -5,7 +5,6 @@ let Multimedia = require('./index.js');
 let mm = new Multimedia( );
 
 function setupRoutes(App){
-  console.log("Start Multimedia routes setup")
   router.use( (req, res, next) => {
     req._ctx['service']  = "multimedia";
     req._ctx['resource']  = req.query.service;
@@ -59,8 +58,6 @@ function setupRoutes(App){
     .catch (next);
   });
 
-  console.log("Multimedia routes setup pre edit")
-
   router.post('/editImage', function(req, res, next) { 
     var ctx = req._ctx;
 
@@ -73,7 +70,6 @@ function setupRoutes(App){
       .catch (next);
 
   });
-  console.log("Multimedia routes setup finish")
 
   App.app.use(`${App.baseRoute}/srv/multimedia`, router);
 

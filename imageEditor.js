@@ -7,31 +7,16 @@ let app;      // reference to toroback
 let log;      // logger (toroback's child)
 
 let defaults = {
-  localPath:       'fs/'
+  localPath:   'storage/'
 }
 
 const sizesSpec = {
-  t: {
-    size: 160
-  },
-
-  s:{
-    size: 240
-  },
-
-  m: {
-    size: 640
-  },
-
-  l: {
-    size: 1280
-  },
-
-  xl: {
-    size: 1600
-  }
+  t:  { size: 160 },
+  s:  { size: 240 },
+  m:  { size: 640 },
+  l:  { size: 1280 },
+  xl: { size: 1600 }
 }
-
 
 class ImageEditor{
 
@@ -47,25 +32,25 @@ class ImageEditor{
       if(!dest || !dest.service || !dest.container){
         reject(new Error("An output must be specified"));
       }else{
-        let rootDir = defaults.localPath + Math.random().toString(36).slice(2);
-        createWorkDir(rootDir)
-          .then(rootDir =>  load(this.src, rootDir))
+        let workDir = defaults.localPath + Math.random().toString(36).slice(2);
+        createWorkDir(workDir)
+          .then(workDir =>  load(this.src, workDir))
           .then(file => modifyImage(file, options))
           .then(files => save(files, dest))
           .then(resolve)
           .catch(reject)
-          .then(res => fs.remove(rootDir));
+          .then(res => fs.remove(workDir));
       }
     });
   }
 }
 
 
-function createWorkDir(rootDir){
+function createWorkDir(workDir){
   return new Promise((resolve, reject) =>{
-    fs.mkdirSync(rootDir);
-    fs.mkdirSync(rootDir + "/tmp");
-    resolve(rootDir);
+    fs.mkdirSync(workDir);
+    fs.mkdirSync(workDir + "/tmp");
+    resolve(workDir);
   })
 }
 
@@ -77,31 +62,38 @@ function createWorkDir(rootDir){
  * @param  {String} input.path Path del archivo
  * @return {[type]}       [description]
  */
-function load(input, dir){
+function load(input, workDir){
   return new Promise( (resolve, reject) => {
-    // let imageId   = Math.random().toString(36).slice(2);
-    // let dir = defaults.localPath + imageId;
-    let imageName = "orig";
-    let dest   = dir + "/" + imageName;
-    
-    // fs.mkdirSync(dir);
-    // fs.mkdirSync(dir + "/tmp");
+    let service = input.service;    
 
-    let fileStream = fs.createWriteStream(
-      dest,
-      { defaultEncoding: 'binary' }
-    );
-    //TODO: cargar el archivo del servicio que sea necesario
-    let storage  = new app.Storage(input.service);
-    if (storage) {
-      storage.downloadFile({ container: input.container, file: input.path, res: fileStream })
-        .then( res =>  resolve({path: dest, dir: dir, name: imageName}))
-        .catch( (err) => {
-          fs.unlink(dest, (err) => { log.warn(err) });
-          reject(err);
-        });
-    }else {
-      reject(new Error('Input storage not configured: ' + input.service));
+    if(service == 'local'){ //Si la imagen está en local si obtiene el path local desde tb-storage y se devuelve
+      let localPath = app.Storage.getLocalPath(input.container, input.path);
+      let resp = {
+        path: localPath,
+        workDir:  workDir,
+        name: path.basename(localPath)
+      }
+      resolve(resp);
+    }else{
+      let imageName = path.basename(input.path);
+      let dest = path.normalize(workDir + "/" + imageName);
+
+      let fileStream = fs.createWriteStream(
+        dest,
+        { defaultEncoding: 'binary' }
+      );
+      //TODO: cargar el archivo del servicio que sea necesario
+      let storage  = new app.Storage(service);
+      if (storage) {
+        storage.downloadFile({ container: input.container, file: input.path, res: fileStream })
+          .then( res =>  resolve({path: dest, workDir: workDir, name: imageName}))
+          .catch( (err) => {
+            fs.unlink(dest, (err) => { log.warn(err) });
+            reject(err);
+          });
+      }else {
+        reject(new Error('Input storage not configured: ' + service));
+      }
     }
   });
 }
@@ -112,7 +104,14 @@ function save(files, output){
       let promises = [];
       
       files.forEach( file=> {
-        promises.push(uploadFile(file, output)
+        promises.push(uploadFile(file.path, output)
+          .then(res => { //la respuesta es {file:{}}
+            let obj = res.file;
+            if(file.size){
+              obj.size = file.size
+            }
+            return Promise.resolve(obj);
+          })
           .catch(err =>{
             console.log(err);
             return Promise.resolve(undefined);
@@ -132,8 +131,6 @@ function save(files, output){
 }
 
 function uploadFile(file, output){
- // console.log('==========================>>>> uploadAWSFile');
-  log.trace('saveFile');
   return new Promise( (resolve, reject) => {
     let fileName = path.basename(file)
     let storage  = new app.Storage(output.service);
@@ -149,7 +146,7 @@ function uploadFile(file, output){
         .then( resolve )
         .catch(reject);
     } else {
-      reject(new Error('Transcoder storage not configured. This is a ToroBack internal missing configuration.'));
+      reject(new Error('Storage not configured. This is a ToroBack internal missing configuration.'));
     }
   });
 }
@@ -157,20 +154,17 @@ function uploadFile(file, output){
 function modifyImage(image, edit){
   return new Promise( (resolve, reject) => {
     //TODO: modificar la imagen con la informacion de edit
-    // let output = image.dir+"/edit.png";
-    // let gmTask = gm(image.path);
-
     Promise.resolve(image.path)
       .then(imagePath =>{
         if(edit.rotate){
-          return rotate(imagePath, image.dir, edit.rotate);
+          return rotate(imagePath, image.workDir, edit.rotate);
         }else{
           return Promise.resolve(imagePath);
         }
       })
       .then(imagePath => {     
         if(edit.crop){
-           return crop(imagePath, image.dir, edit.crop)
+           return crop(imagePath, image.workDir, edit.crop)
         }else{
           return Promise.resolve(imagePath)
         }
@@ -178,9 +172,9 @@ function modifyImage(image, edit){
       // .then(imagePath => gmWrite(gm(imagePath), output))
       .then(editPath => {
         if(edit.resize){
-          return performResize(editPath, image.dir, edit.resize);
+          return performResize(editPath, image.workDir, edit.resize);
         }else{
-          return Promise.resolve([editPath]);
+          return Promise.resolve([{path: editPath}]);
         }
       })
       .then(resolve)
@@ -192,7 +186,8 @@ function modifyImage(image, edit){
 
 function rotate(imagePath, destPath, rotation){
   return new Promise( (resolve, reject) => {
-    gmWrite(gm(imagePath).rotate("none",rotation), destPath+"/tmp/rotate.png")
+    let ext = getExtension(imagePath);
+    gmWrite(gm(imagePath).rotate("none",rotation), destPath+"/tmp/rotate"+ext)
       .then(res => resolve(res))
       // .then(res => resolve(gm(res)))
       .catch(reject);
@@ -202,10 +197,10 @@ function rotate(imagePath, destPath, rotation){
 
 function crop(imagePath, destPath, crop, bgColor = 'none'){
   return new Promise( (resolve, reject) => {
+    let origExt = getExtension(imagePath);
     let gmTask = gm(imagePath);
+    console.log("image path "+ imagePath)
     gmTask.size((err, size) => {
-      console.log("size err",err);
-      console.log("size",size);
       let cutSize;
       let x = 0;
       let y = 0;
@@ -220,7 +215,7 @@ function crop(imagePath, destPath, crop, bgColor = 'none'){
       gmTask.crop(cutSize, cutSize, x, y)
       if(crop == "rounded"){
         Promise.all([
-          gmWrite(gmTask, destPath+"/tmp/crop.png"),
+          gmWrite(gmTask, destPath+"/tmp/crop"+origExt),
           createCircle(destPath+"/tmp/circle.png", cutSize, cutSize, cutSize/2, cutSize/2, cutSize/2, 0 ),
           createBackground(destPath+"/tmp/bg.png", cutSize, cutSize)
           ])
@@ -233,7 +228,7 @@ function crop(imagePath, destPath, crop, bgColor = 'none'){
           .then(resolve)
           .catch(reject);
       }else{
-        gmWrite(gmTask, destPath+"/tmp/crop.png")
+        gmWrite(gmTask, destPath+"/tmp/crop"+origExt)
         .then(resolve)
         .catch(reject);
       }
@@ -276,7 +271,10 @@ function performResize(pathOrig, pathDest,sizes){
       let lowerCaseKey = size.toLocaleString();
       let sizeSpec = sizesSpec[lowerCaseKey];
       if(sizeSpec){
-        promises.push(resize(pathOrig, pathDest+"/"+lowerCaseKey+".png", sizeSpec.size, sizeSpec.size))
+        let ext = getExtension(pathOrig);
+        let prom = resize(pathOrig, pathDest+"/"+lowerCaseKey+ext, sizeSpec.size, sizeSpec.size)
+                    .then(path => {return {path: path, size: size}});
+        promises.push(prom);
       }
     });
 
@@ -297,6 +295,8 @@ function resize(pathOrig, pathDest, width , height ){
   });
 }
 
-
+function getExtension(filePath){
+  return path.extname(filePath);
+}
 
 module.exports = ImageEditor;
