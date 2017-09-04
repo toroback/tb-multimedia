@@ -265,6 +265,8 @@ function uploadUserFiles(files, output, transcoderOptions) {
     if (awsStorage && userStorage) {
       // download each file from aws, then upload to user container,
       // then remove local file (all, one by one)
+      // TODO: someday... stream directly from one container to the other
+      // TODO: handle "public" flag to make output files public or not (take as user argument)
       let lastError;
       let userFiles = [ ];
       files.forEach(file => {
@@ -276,7 +278,7 @@ function uploadUserFiles(files, output, transcoderOptions) {
         );
         let arg = {
           container: transcoderDefaults.outputContainer,
-          file:      file,
+          path:      file,
           res:       fileStream
         };
         awsStorage.downloadFile(arg)
@@ -287,7 +289,8 @@ function uploadUserFiles(files, output, transcoderOptions) {
             let arg = {
               container: output.container,
               path: userFileName, // destination
-              file: { path: transcoderDefaults.localPath + fileName }   // local path to read file from
+              file: { path: transcoderDefaults.localPath + fileName },   // local path to read file from
+              public: true
             };
             return userStorage.uploadFile(arg);
           })
@@ -705,7 +708,7 @@ function checkOutputStorage(out) {
       reject(new Error('Service ' + out.service + ' not configured'));
     else {
       // check for container existance at least (there's no way yet to read RW access)
-      storage.getContainerInfo({ name: out.container })
+      storage.getContainerInfo({ container: out.container })
         .then( ( ) => resolve(out))
         .catch( reject );   // TODO: ah ok... Storage se rompe si no existe el bucket! (o si se escribe con mayúscula)
     }

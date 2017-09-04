@@ -28,7 +28,7 @@ function setupRoutes(App){
   // Response:
   //   id:      String. Streaming job identifier.
   //   status:  String: Status of job. (only 'processing' at this stage)
-  router.post('/streaming', (req, res,next) => {
+  router.post('/streaming', (req, res, next) => {
     mm.streaming(req.body)
     .then ( resp => res.json(resp))
     .catch (next);
@@ -51,7 +51,7 @@ function setupRoutes(App){
   //       playlist:  String: File path, relative to bucket, where to find the playlist for this target plataform.
   //       thumbnail: String: (Optional) File path, relative to bucket, where to find the thumbnail, if requested.
   //   
-  router.get('/streaming/:id', (req, res,next)=>{
+  router.get('/streaming/:id', (req, res, next)=>{
 
     mm.readJob(req.params.id)
     .then ( resp => res.json(resp))
