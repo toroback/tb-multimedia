@@ -1,5 +1,10 @@
 
 let router = new require('express').Router();
+
+let multer = require('multer');
+let path = require('path');
+var appDir = path.dirname(require.main.filename);
+let upload = multer({dest:appDir+'/../uploads'});
 // TODO: this require needs to be fixed. re-structure.
 let Multimedia = require('./index.js');
 let mm = new Multimedia( );
@@ -70,6 +75,41 @@ function setupRoutes(App){
       .catch (next);
 
   });
+
+
+  router.get('/genToken', function(req, res, next) { 
+    var ctx = req._ctx;
+    mm.getFlickrToken() 
+      .then ( resp => res.json(resp))
+      .catch (next);
+
+  });
+
+  router.get('/genTokenCallback', function(req, res, next) { 
+    var ctx = req._ctx;
+
+    mm.flickrTokenCallback() 
+      .then ( resp => res.json(resp))
+      .catch (next);
+
+  });
+
+  router.post("/upload",upload.single('fileUpload'),function(req, res, next){
+    var ctx = req._ctx;
+    ctx.payload.service = ctx.resource;
+  
+    if(req.file)
+      ctx.payload.file = req.file;
+
+    ctx.payload.token = req.query.token;
+    ctx.payload.tokenSecret = req.query.tokenSecret;
+
+    mm.uploadToFlickr(ctx.payload)
+      .then(resp => res.status(200).json(resp))
+      .catch(next);
+  }); 
+
+
 
   App.app.use(`${App.baseRoute}/srv/multimedia`, router);
 
