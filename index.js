@@ -10,7 +10,6 @@
 let app;      // reference to toroback
 let log;      // logger (toroback's child)
 let defaultOptions;   // default values if instance called without options
-let flickrClient;
 
 class MultiMedia {
 
@@ -29,9 +28,6 @@ class MultiMedia {
         this.services.transcoder = new Transcoder(app, options.transcoder);
       }
     }
-
-    let Flickr = require("./services/service-flickr");
-    flickrClient = new Flickr(App.socialOptions.flickr);
     // check for at least one service setup
     // if ( Object.keys(this.services).length == 0 ) {
     //   throw new Error('Multimedia: at least one module needs to be configured.');
@@ -47,7 +43,6 @@ class MultiMedia {
       defaultOptions = _app.multimediaOptions || { };
       log.info('Setup: Multimedia');
 
-    
       checkGM()
         .then(res => {
           // load routes
@@ -89,30 +84,6 @@ class MultiMedia {
     });
   }
   
-  uploadToFlickr(arg){
-    return new Promise( (resolve, reject) => {
-      // let Flickr = require("./services/service-flickr");
-      // let client = new Flickr(App.socialOptions.flickr);
-      flickrClient.upload(arg)
-        .then(resolve)
-        .catch(reject);
-    });
-  }
-
-  getFlickrToken(arg){
-     return new Promise( (resolve, reject) => {
-      flickrClient.genTestToken()
-        .then(resolve)
-        .catch(reject);
-      // resolve({msg:"myToken"});
-    });
-  }
-
-  flickrTokenCallback(arg){
-     return new Promise( (resolve, reject) => {
-      resolve({msg:"myToken"});
-    });
-  }
 }
 
 /**
