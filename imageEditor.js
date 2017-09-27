@@ -287,7 +287,7 @@ function performResize(pathOrig, pathDest,sizes){
 function resize(pathOrig, pathDest, width , height ){
   return new Promise(function(resolve, reject){
     gm(pathOrig)
-    .resize(width, height,'!')
+    .resize(width, height,'>')
     .write(pathDest, function (err) {
       if (err) reject(err);
       else resolve(pathDest);
