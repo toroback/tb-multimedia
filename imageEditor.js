@@ -153,7 +153,7 @@ function uploadFile(file, output){
 
 function modifyImage(image, edit){
   return new Promise( (resolve, reject) => {
-    //TODO: modificar la imagen con la informacion de edit
+    // modifica la imagen con la informacion de edit
     Promise.resolve(image.path)
       .then(imagePath =>{
         if(edit.rotate){
@@ -169,7 +169,6 @@ function modifyImage(image, edit){
           return Promise.resolve(imagePath)
         }
       })
-      // .then(imagePath => gmWrite(gm(imagePath), output))
       .then(editPath => {
         if(edit.resize){
           return performResize(editPath, image.workDir, edit.resize);
@@ -179,8 +178,6 @@ function modifyImage(image, edit){
       })
       .then(resolve)
       .catch(reject);
-      //.then(res => fs.remove(image.dir+'/tmp'));
-
   });
 }
 
@@ -201,6 +198,9 @@ function crop(imagePath, destPath, crop, bgColor = 'none'){
     let gmTask = gm(imagePath);
     console.log("image path "+ imagePath)
     gmTask.size((err, size) => {
+      if(err)
+        throw err;
+
       let cutSize;
       let x = 0;
       let y = 0;
