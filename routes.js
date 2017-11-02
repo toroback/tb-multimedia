@@ -58,6 +58,7 @@ function setupRoutes(App){
     .catch (next);
   });
 
+
   router.post('/editImage', function(req, res, next) { 
     var ctx = req._ctx;
 

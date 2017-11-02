@@ -171,7 +171,7 @@ function modifyImage(image, edit){
       })
       .then(editPath => {
         if(edit.resize){
-          return performResize(editPath, image.workDir, edit.resize);
+          return performResize(editPath, image.workDir, edit.resize, edit.force);
         }else{
           return Promise.resolve([{path: editPath}]);
         }
@@ -196,7 +196,6 @@ function crop(imagePath, destPath, crop, bgColor = 'none'){
   return new Promise( (resolve, reject) => {
     let origExt = getExtension(imagePath);
     let gmTask = gm(imagePath);
-    console.log("image path "+ imagePath)
     gmTask.size((err, size) => {
       if(err)
         throw err;
@@ -264,30 +263,46 @@ function gmWrite(gmTask, path){
 }
 
 
-function performResize(pathOrig, pathDest,sizes){
+function performResize(pathOrig, pathDest, sizes, force = false){
   return new Promise(function(resolve, reject){
-    let promises = [];
-    sizes.forEach( size => {
-      let lowerCaseKey = size.toLocaleString();
-      let sizeSpec = sizesSpec[lowerCaseKey];
-      if(sizeSpec){
-        let ext = getExtension(pathOrig);
-        let prom = resize(pathOrig, pathDest+"/"+lowerCaseKey+ext, sizeSpec.size, sizeSpec.size)
-                    .then(path => {return {path: path, size: size}});
-        promises.push(prom);
-      }
-    });
+    //Se obtiene el tamaño original para limitar el resize que no sea mas grande
+    gm(pathOrig).size((err, originalSize) => { 
+      if(err) throw err;
+      
+      let promises = [];
+      sizes.forEach( size => {
+        let lowerCaseKey = size.toLocaleString();
+        let sizeSpec = sizesSpec[lowerCaseKey];
+        if(sizeSpec){
+          let width = force ? sizeSpec.size : Math.min(sizeSpec.size, originalSize.width);
+          let height = force ? sizeSpec.size : Math.min(sizeSpec.size, originalSize.height); 
+          let ext = getExtension(pathOrig);
+          let prom = resize(pathOrig, pathDest+"/"+lowerCaseKey+ext, width, height)
+                      .then(path => {return {path: path, size: size}});
+          promises.push(prom);
+        }
+      });
 
-    Promise.all(promises)
-      .then(resolve)
-      .catch(reject);
+      Promise.all(promises)
+        .then(resolve)
+        .catch(reject);
+    });
   });
 }
 
+/**
+ * Redimensiona la imagen en pathOrig con los tamaños pasados y la guarda en pathDest
+ * @param  {[type]} pathOrig Ubicacion de la imagen a modificar
+ * @param  {[type]} pathDest Ubicacion destino de la imagen
+ * @param  {[type]} width    Width a redimensionar
+ * @param  {[type]} height   Height a redimensionar
+ * @return {[type]}          [description]
+ */
+//http://www.imagemagick.org/Usage/resize/ para mas detalles sobre la funcion y las opciones
 function resize(pathOrig, pathDest, width , height ){
   return new Promise(function(resolve, reject){
     gm(pathOrig)
-    .resize(width, height,'>')
+    .resize(width, height)
     .write(pathDest, function (err) {
       if (err) reject(err);
       else resolve(pathDest);
