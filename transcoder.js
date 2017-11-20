@@ -53,6 +53,11 @@ let transcoderDefaults = {
   localPath:       'storage/'
 }
 
+/**
+ * Clase que se encarga de realizar el transcode de videos
+ * @private
+ * @memberOf module:tb-multimedia
+ */
 class Transcoder {
   constructor(_app, _options) {
     if (!_options.accessKeyId || !_options.secretAccessKey) {

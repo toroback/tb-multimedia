@@ -18,8 +18,21 @@ const sizesSpec = {
   xl: { size: 1600 }
 }
 
+/**
+ * Clase para la edición de imágenes
+ * @private
+ * @memberOf module:tb-multimedia
+ */
 class ImageEditor{
 
+  /**
+   * Crea un editor de imagen
+   * @param  {Object} _app Objeto App del servidor
+   * @param  {Object} src  Referencia a la imagen a editar
+   * @param  {String} src.service            Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @param  {String} src.container          Nombre del contenedor en el servicio.
+   * @param  {String} src.path               ath al archivo, relativo al contenedor.
+   */
   constructor(_app, src){
     app = _app;      // reference to toroback
     log = _app.log.child({module:'multimedia-imageEditor'});  // logger (toroback's child)
@@ -27,6 +40,20 @@ class ImageEditor{
     this.src = src;
   }
 
+  /**
+   * Edita la imagen preconfigurada con las opciones dadas
+   * @param  {Object}   options                Las modificaciones a realizar sobre la imagen.
+   * @param  {String}   [options.crop]         Tipo de crop que aplicar a la imagen (valores: squared, rounded).
+   * @param  {Number}   [options.rotate]       Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
+   * @param  {Array}    [options.resize]       Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
+   * @param  {Boolean}  [options.force]        True para forzar la redimension a los tamaños indicados, sino como máximo será el tamaño de la imagen original
+   * @param  {Object}   dest                   Configuración de salida, dónde ubicar la imagen editada.
+   * @param  {String}   dest.service           Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @param  {String}   dest.container         Nombre del Bucket en el servicio. Debe existir.
+   * @param  {String}   dest.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
+   * @param  {Boolean}  [dest.public]          Indica si el archivo de salida debe ser público o no.
+   * @return {Promise<Object>}  Una promesa con el resultado de la edición
+   */
   edit(options, dest){
     return new Promise( (resolve, reject) => {
       if(!dest || !dest.service || !dest.container){
@@ -45,7 +72,12 @@ class ImageEditor{
   }
 }
 
-
+/**
+ * Crea los directorios de trabajo
+ * @private
+ * @param  {String} workDir Path del directorio base de trabajo
+ * @return {Promise<String>} Promesa con el directorio de trabajo creado
+ */
 function createWorkDir(workDir){
   return new Promise((resolve, reject) =>{
     fs.mkdirSync(workDir);
@@ -56,11 +88,12 @@ function createWorkDir(workDir){
 
 /**
  * Carga un archivo con la informacion del input
+ * @private
  * @param  {Object} input [description]
  * @param  {String} input.service Servicio del que cargar el archivo (gcloud, local, aws)
  * @param  {String} input.container Contedor del archivo
  * @param  {String} input.path Path del archivo
- * @return {[type]}       [description]
+ * @return {Promise<Object>}  Promesa con el resultado de carlar la imagen fuente
  */
 function load(input, workDir){
   return new Promise( (resolve, reject) => {
@@ -292,11 +325,7 @@ function performResize(pathOrig, pathDest, sizes, force = false){
 
 /**
  * Redimensiona la imagen en pathOrig con los tamaños pasados y la guarda en pathDest
- * @param  {[type]} pathOrig Ubicacion de la imagen a modificar
- * @param  {[type]} pathDest Ubicacion destino de la imagen
- * @param  {[type]} width    Width a redimensionar
- * @param  {[type]} height   Height a redimensionar
- * @return {[type]}          [description]
+ * @private
  */
 //http://www.imagemagick.org/Usage/resize/ para mas detalles sobre la funcion y las opciones
 function resize(pathOrig, pathDest, width , height ){

@@ -4,6 +4,10 @@ let router = new require('express').Router();
 let Multimedia = require('./index.js');
 let mm = new Multimedia( );
 
+
+/**
+ * @module tb-multimedia/routes
+ */
 function setupRoutes(App){
   router.use( (req, res, next) => {
     req._ctx['service']  = "multimedia";
@@ -28,6 +32,30 @@ function setupRoutes(App){
   // Response:
   //   id:      String. Streaming job identifier.
   //   status:  String: Status of job. (only 'processing' at this stage)
+
+  /**
+   * Request to transcode a video to a streaming format.
+   * This call creates a job. The actual result can be read from GET /streaming/:jobId
+   *
+   * @name Stream video
+   *
+   * @route  {POST} srv/multimedia/streaming
+   * 
+   * @bodyparam  {Object}   input                    Reference where to take the input video from
+   * @bodyparam  {String}   input.service            File Storage service (values: local, gcloud, aws, url)
+   * @bodyparam  {String}   input.container          Bucket name in service. Not required if service = url
+   * @bodyparam  {String}   input.path               Path to file, relative to bucket. If service = url, full URL path.
+   * @bodyparam  {Object}   output                   Output settings, where to put the output streaming files and playlists.
+   * @bodyparam  {String}   output.service           File Storage service (values: local, gcloud, aws)
+   * @bodyparam  {String}   output.container         Bucket name in service. Must exist already.
+   * @bodyparam  {String}   output.pathPrefix        Prefix path where to put all the output files.
+   * @bodyparam  {Array}    output.targets           Target platforms to transcode the video for. (values: IOS, ANDROID, WEB_MPEG_DASH)
+   * @bodyparam  {Array}    output.qualities         Video resolutions to make available in the playlist. (values: SD, HD, FHD, UHD)
+   * @bodyparam  {Boolean}  [output.thumbnail=false] Whether or not to also generate a thumbnail.
+   * 
+   * @return {Object}  Objeto con la respuesta (Por describir)
+   *          
+   */
   router.post('/streaming', (req, res, next) => {
     mm.streaming(req.body)
     .then ( resp => res.json(resp))
@@ -51,6 +79,19 @@ function setupRoutes(App){
   //       playlist:  String: File path, relative to bucket, where to find the playlist for this target plataform.
   //       thumbnail: String: (Optional) File path, relative to bucket, where to find the thumbnail, if requested.
   //   
+
+  /**
+   * Read status from a previously created streaming request
+   * 
+   * @name Get straming info
+   *
+   * @route  {GET} srv/multimedia/streaming/:id
+   *
+   * @routeparam {String} id   Job ID obtained from making the streaming request
+   * 
+   * @return {Object} Objeto con la respuesta (Por describir)
+   *
+   */
   router.get('/streaming/:id', (req, res, next)=>{
 
     mm.readJob(req.params.id)
@@ -59,6 +100,32 @@ function setupRoutes(App){
   });
 
 
+
+  /**
+   * Edita una imagen.
+   *
+   * @name Edit image
+   *
+   * @route  {POST} srv/multimedia/editImage
+   * 
+   * @bodyparam  {Object}   input                    Referencia de donde tomar la imagen de entrada
+   * @bodyparam  {String}   input.service            Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @bodyparam  {String}   input.container          Nombre del contenedor en el servicio.
+   * @bodyparam  {String}   input.path               ath al archivo, relativo al contenedor.
+   * @bodyparam  {Object}   output                   Configuración de salida, dónde ubicar la imagen editada.
+   * @bodyparam  {String}   output.service           Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @bodyparam  {String}   output.container         Nombre del Bucket en el servicio. Debe existir.
+   * @bodyparam  {String}   output.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
+   * @bodyparam  {Boolean}  [output.public]          Indica si el archivo de salida debe ser público o no.
+   * @bodyparam  {Object}   image                    Las modificaciones a realizar sobre la imagen.
+   * @bodyparam  {String}   [image.crop]             Tipo de crop que aplicar a la imagen (valores: squared, rounded).
+   * @bodyparam  {Number}   [image.rotate]           Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
+   * @bodyparam  {Array}    [image.resize]           Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
+   * @bodyparam  {Boolean}  [image.force]            True para forzar la redimension a los tamaños indicados, sino como máximo será el tamaño de la imagen original
+   * 
+   * @return {Object}  Objeto con la respuesta (Por describir)
+   *          
+   */
   router.post('/editImage', function(req, res, next) { 
     var ctx = req._ctx;
 

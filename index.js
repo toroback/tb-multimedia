@@ -7,12 +7,43 @@
  * to the constructor, but app and log will remain shared.
 */
 
+/** 
+ * @module tb-multimedia 
+ * @description 
+ *
+ * <p>Este módulo ofrece distintas funcionalidades multimedia. Algunas de ellas son:
+ * <ul>
+ * <li> Streaming de video </li>
+ * <li> Edición de imágenes </li>
+ * </ul>
+ * </p>
+ * <p>
+ * @see [Guía de uso]{@tutorial tb-multimedia} para más información.
+ * @see [REST API]{@link module:tb-multimedia/routes} (API externo).
+ * @see [Class API]{@link module:tb-multimedia.Multimedia} (API interno).
+ * @see Repositorio en {@link https://github.com/toroback/tb-multimedia|GitHub}.
+ * </p>
+ * 
+ */
+
+
 let app;      // reference to toroback
 let log;      // logger (toroback's child)
 let defaultOptions;   // default values if instance called without options
 
-class MultiMedia {
+/**
+* Clase que representa un gestor de multimedia
+ * @memberOf module:tb-multimedia
+ */
+class Multimedia {
 
+  /**
+   * Crea una instancia de un gestor de multimedia
+   * @param  {Object} _options Opciones para configurar el gestor
+   * @param  {Object} [_options.transcoder] Opciones para configurar el servicio de streaming
+   * @param  {Object} [_options.transcoder.accessKeyId] Opciones para configurar el servicio de streaming
+   * @param  {Object} [_options.transcoder.secretAccessKey] Opciones para configurar el servicio de streaming
+   */
   constructor(_options) {  // this represents app.multimediaOptions
     if (!app)
       throw new Error('Constructor: setup() needs to be called first');
@@ -34,7 +65,11 @@ class MultiMedia {
     // }
   }
 
-  // multimedia tb module setup. Must be called before any instance creation. 
+  /**
+   * Setup del módulo. Debe ser llamado antes de crear una instancia
+   * @param {Object} _app Objeto App del servidor
+   * @return {Promise} Una promesa
+   */
   static setup(_app) {
     return new Promise( (resolve, reject) => {
       // set globals
@@ -55,6 +90,22 @@ class MultiMedia {
 
   // Request to transcode a video to a streaming format
   // See route for detailed arguments
+  /**
+   * Request to transcode a video to a streaming format
+   * @param {Object}  options                          Object with streaming options
+   * @param {Object}  options.input                    Reference where to take the input video from
+   * @param {String}  options.input.service            File Storage service (values: local, gcloud, aws, url)
+   * @param {String}  options.input.container          Bucket name in service. Not required if service = url
+   * @param {String}  options.input.path               Path to file, relative to bucket. If service = url, full URL path.
+   * @param {Object}  options.output                   Output settings, where to put the output streaming files and playlists.
+   * @param {String}  options.output.service           File Storage service (values: local, gcloud, aws)
+   * @param {String}  options.output.container         Bucket name in service. Must exist already.
+   * @param {String}  options.output.pathPrefix        Prefix path where to put all the output files.
+   * @param {Array}   options.output.targets           Target platforms to transcode the video for. (values: IOS, ANDROID, WEB_MPEG_DASH)
+   * @param {Array}   options.output.qualities         Video resolutions to make available in the playlist. (values: SD, HD, FHD, UHD)
+   * @param {Boolean} [options.output.thumbnail=false] Whether or not to also generate a thumbnail.
+   * @return {Promise<Object>} A promise to the result
+   */
   streaming (options) {
     // returns a promise
     if (this.services.transcoder)
@@ -65,6 +116,12 @@ class MultiMedia {
 
   // Read status from a previously created streaming request
   // See route for detailed arguments
+
+  /**
+   * Read status from a previously created streaming request
+   * @param {String}  jobId    Job ID obtained from making the streaming request
+   * @return {Promise<Object>} A promise to the result       
+   */
   readJob(jobId) {
     // returns a promise
     if (this.services.transcoder)
@@ -73,12 +130,29 @@ class MultiMedia {
       return Promise.reject(new Error('Streaming: Transcoder not configured on readJob'));
   }
 
-
-  editImage(input, output, edit){
+  /**
+   * Edita una imagen.
+   * @param  {Object}   input                    Referencia de donde tomar la imagen de entrada
+   * @param  {String}   input.service            Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @param  {String}   input.container          Nombre del contenedor en el servicio.
+   * @param  {String}   input.path               ath al archivo, relativo al contenedor.
+   * @param  {Object}   output                   Configuración de salida, dónde ubicar la imagen editada.
+   * @param  {String}   output.service           Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @param  {String}   output.container         Nombre del Bucket en el servicio. Debe existir.
+   * @param  {String}   output.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
+   * @param  {Boolean}  [output.public]          Indica si el archivo de salida debe ser público o no.
+   * @param  {Object}   image                    Las modificaciones a realizar sobre la imagen.
+   * @param  {String}   [image.crop]             Tipo de crop que aplicar a la imagen (valores: squared, rounded).
+   * @param  {Number}   [image.rotate]           Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
+   * @param  {Array}    [image.resize]           Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
+   * @param  {Boolean}  [image.force]            True para forzar la redimension a los tamaños indicados, sino como máximo será el tamaño de la imagen original
+   * @return {Promise<Object>} Una promesa con el resultado
+   */
+  editImage(input, output, image){
     return new Promise( (resolve, reject) => {
       let ImageEditor = require('./imageEditor.js');
       let imageEditor = new ImageEditor(App, input);
-      imageEditor.edit(edit, output)
+      imageEditor.edit(image, output)
         .then(resolve)
         .catch(reject);
     });
@@ -88,7 +162,8 @@ class MultiMedia {
 
 /**
  * Comprueba que GM esté instalado
- * @return {[type]} [description]
+ * @private
+ * @return {Promise} Una promesa
  */
 function checkGM(){
   return new Promise((resolve, reject)=>{
@@ -106,4 +181,4 @@ function checkGM(){
 
 
 
-module.exports = MultiMedia;
+module.exports = Multimedia;
