@@ -109,7 +109,20 @@ function load(input, workDir){
       resolve(resp);
     }else if(service == 'url'){
       
-      let imageName = path.basename(input.path)  || Math.random().toString(36).slice(2)
+      let imageName = path.basename(input.path) || Math.random().toString(36).slice(2);
+      // imageName = imageName.split('?')[0];
+      // console.log("imageName 1"+imageName);
+      // imageName = decodeURIComponent(imageName);
+      // console.log("imageName 2"+imageName);
+      if(imageName.includes('?')){
+        imageName = imageName.substring(0, imageName.indexOf('?'));
+      }
+      // console.log("imageName 3 "+imageName);
+      // if(imageName.includes('/')){
+      //   imageName = imageName.substring(imageName.lastIndexOf('/'), imageName.length);
+      // }
+      // console.log("imageName 4"+imageName);
+      // 
       let dest = path.normalize(workDir + "/" + imageName);
 
       let fileStream = fs.createWriteStream(
