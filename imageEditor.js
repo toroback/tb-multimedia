@@ -29,9 +29,9 @@ class ImageEditor{
    * Crea un editor de imagen
    * @param  {Object} _app Objeto App del servidor
    * @param  {Object} src  Referencia a la imagen a editar
-   * @param  {String} src.service            Servicio de almacenamiento (valores: local, gcloud, aws)
-   * @param  {String} src.container          Nombre del contenedor en el servicio.
-   * @param  {String} src.path               ath al archivo, relativo al contenedor.
+   * @param  {String} src.service            Servicio del que cargar el archivo (gcloud, local, aws, url).
+   * @param  {String} [src.container]        Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
+   * @param  {String} src.path               Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
    */
   constructor(_app, src){
     app = _app;      // reference to toroback
@@ -90,9 +90,9 @@ function createWorkDir(workDir){
  * Carga un archivo con la informacion del input
  * @private
  * @param  {Object} input [description]
- * @param  {String} input.service Servicio del que cargar el archivo (gcloud, local, aws)
- * @param  {String} input.container Contedor del archivo
- * @param  {String} input.path Path del archivo
+ * @param  {String} input.service Servicio del que cargar el archivo (gcloud, local, aws, url).
+ * @param  {String} [input.container] Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
+ * @param  {String} input.path Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
  * @return {Promise<Object>}  Promesa con el resultado de carlar la imagen fuente
  */
 function load(input, workDir){
@@ -107,6 +107,25 @@ function load(input, workDir){
         name: path.basename(localPath)
       }
       resolve(resp);
+    }else if(service == 'url'){
+      
+      let imageName = path.basename(input.path)  || Math.random().toString(36).slice(2)
+      let dest = path.normalize(workDir + "/" + imageName);
+
+      let fileStream = fs.createWriteStream(
+        dest,
+        { defaultEncoding: 'binary' }
+      );
+     let downloader = input.path.match(/^http:\/\//i) ? require('http') : require('https');
+
+      downloader.get( input.path, (resp) => {
+        resp.pipe(fileStream);
+        resp.on('end', (resp) => resolve({path: dest, workDir: workDir, name: imageName}));
+      }).on('error', (err) => {
+        fs.unlink(dest, (err) => { log.warn(err) });
+        reject(err);
+      });
+
     }else{
       let imageName = path.basename(input.path);
       let dest = path.normalize(workDir + "/" + imageName);
@@ -118,7 +137,7 @@ function load(input, workDir){
       //TODO: cargar el archivo del servicio que sea necesario
       let storage  = new app.Storage(service);
       if (storage) {
-        storage.downloadFile({ container: input.container, file: input.path, res: fileStream })
+        storage.downloadFile({ container: input.container, path: input.path, res: fileStream })
           .then( res =>  resolve({path: dest, workDir: workDir, name: imageName}))
           .catch( (err) => {
             fs.unlink(dest, (err) => { log.warn(err) });
@@ -216,8 +235,9 @@ function modifyImage(image, edit){
 
 function rotate(imagePath, destPath, rotation){
   return new Promise( (resolve, reject) => {
-    let ext = getExtension(imagePath);
-    gmWrite(gm(imagePath).rotate("none",rotation), destPath+"/tmp/rotate"+ext)
+    // let ext = getExtension(imagePath);
+    let fileName = path.basename(imagePath);
+    gmWrite(gm(imagePath).rotate("none",rotation), destPath+"/tmp/"+fileName)
       .then(res => resolve(res))
       // .then(res => resolve(gm(res)))
       .catch(reject);
@@ -228,6 +248,7 @@ function rotate(imagePath, destPath, rotation){
 function crop(imagePath, destPath, crop, bgColor = 'none'){
   return new Promise( (resolve, reject) => {
     let origExt = getExtension(imagePath);
+    let fileNameNoExt = path.basename(imagePath, origExt);
     let gmTask = gm(imagePath);
     gmTask.size((err, size) => {
       if(err)
@@ -247,20 +268,23 @@ function crop(imagePath, destPath, crop, bgColor = 'none'){
       gmTask.crop(cutSize, cutSize, x, y)
       if(crop == "rounded"){
         Promise.all([
-          gmWrite(gmTask, destPath+"/tmp/crop"+origExt),
+          // gmWrite(gmTask, destPath+"/tmp/crop"+origExt),
+          gmWrite(gmTask, destPath+"/tmp/"+fileNameNoExt + origExt),
           createCircle(destPath+"/tmp/circle.png", cutSize, cutSize, cutSize/2, cutSize/2, cutSize/2, 0 ),
           createBackground(destPath+"/tmp/bg.png", cutSize, cutSize)
           ])
           .then(results =>{
             let compositeTask =  gm(results[2])
             compositeTask.composite(results[0], results[1]) 
-            return gmWrite(compositeTask, destPath+"/tmp/round.png");
+            // return gmWrite(compositeTask, destPath+"/tmp/round.png");
+            return gmWrite(compositeTask, destPath+"/tmp/"+fileNameNoExt+".png");
            
           })
           .then(resolve)
           .catch(reject);
       }else{
-        gmWrite(gmTask, destPath+"/tmp/crop"+origExt)
+         // gmWrite(gmTask, destPath+"/tmp/crop"+origExt)
+        gmWrite(gmTask, destPath+"/tmp/"+fileNameNoExt + origExt)
         .then(resolve)
         .catch(reject);
       }

@@ -109,9 +109,9 @@ function setupRoutes(App){
    * @route  {POST} srv/multimedia/editImage
    * 
    * @bodyparam  {Object}   input                    Referencia de donde tomar la imagen de entrada
-   * @bodyparam  {String}   input.service            Servicio de almacenamiento (valores: local, gcloud, aws)
-   * @bodyparam  {String}   input.container          Nombre del contenedor en el servicio.
-   * @bodyparam  {String}   input.path               ath al archivo, relativo al contenedor.
+   * @bodyparam  {String}   input.service            Servicio del que cargar el archivo (gcloud, local, aws, url).
+   * @bodyparam  {String}   [input.container]        Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
+   * @bodyparam  {String}   input.path               Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
    * @bodyparam  {Object}   output                   Configuración de salida, dónde ubicar la imagen editada.
    * @bodyparam  {String}   output.service           Servicio de almacenamiento (valores: local, gcloud, aws)
    * @bodyparam  {String}   output.container         Nombre del Bucket en el servicio. Debe existir.

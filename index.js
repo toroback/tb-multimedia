@@ -135,7 +135,7 @@ class Multimedia {
    * @param  {Object}   input                    Referencia de donde tomar la imagen de entrada
    * @param  {String}   input.service            Servicio de almacenamiento (valores: local, gcloud, aws)
    * @param  {String}   input.container          Nombre del contenedor en el servicio.
-   * @param  {String}   input.path               ath al archivo, relativo al contenedor.
+   * @param  {String}   input.path               path al archivo, relativo al contenedor.
    * @param  {Object}   output                   Configuración de salida, dónde ubicar la imagen editada.
    * @param  {String}   output.service           Servicio de almacenamiento (valores: local, gcloud, aws)
    * @param  {String}   output.container         Nombre del Bucket en el servicio. Debe existir.

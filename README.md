@@ -56,14 +56,14 @@ Para configurar el servicio de streaming, en el objeto de configuración de mult
 
 En la solicitud de Streaming se especifica el video de entrada y el formato y configuración del video de salida.
 
-El archivo de entrada puede estar alojado en alguno de los servicios de almacenamiento soportados por el módulo tb-storage (“local”, “gcloud”, “aws”), o puede ser tomado de una URL pública que contenga un archivo de vídeo.
+El archivo de entrada puede estar alojado en alguno de los servicios de almacenamiento soportados por el módulo **tb-storage** (“local”, “gcloud”, “aws”), o puede ser tomado de una URL pública que contenga un archivo de vídeo.
 
 La salida del streaming es un conjunto de archivos, y su formato, calidad y estructura depende de las plataformas destino y la variedad de calidades deseada. Dichos archivos siempre serán públicos para que puedan ser reproducidos directamente desde su ubicación.
 
-La respueta de la solicitud retorna un “job id”, o identificador del trabajo de streaming que se está realizando. Se debe utilizar este id para consultar el estado del proceso posteriormente.
+La respuesta de la solicitud retorna un “job id”, o identificador del trabajo de streaming que se está realizando. Se debe utilizar este id para consultar el estado del proceso posteriormente.
 
 
-NOTA: Para más información sobre el módulo de almacenamiento tb-storage consultar la siguiente URL: "https://github.com/toroback/tb-storage"
+**NOTA**: Para más información sobre el módulo de almacenamiento **tb-storage** consultar la siguiente URL: "https://github.com/toroback/tb-storage"
 
 
 ### **- Solicitud y Parámetros**
@@ -72,7 +72,7 @@ La solicitud se puede realizar mediante la REST Api, realizando una petición PO
 
  `https://a2server.a2system.net:XXXX/api/v1/srv/multimedia/streaming`
 
-ó utilizando las funciones internas de la siguiente manera:
+ó utilizando la Class Api de la siguiente manera:
 
 ```js
   var pamatetros = {...};
@@ -145,7 +145,7 @@ Respuesta:
 ```
 
 
-### Ejemplo REST 2: Video en almacenamiento tb-storage
+### **- Ejemplo REST 2: Video en almacenamiento tb-storage**
 
 POST: `https://a2server.a2system.net:1234/api/v1/srv/multimedia/streaming`
 
@@ -186,7 +186,7 @@ La solicitud se puede realizar mediante la REST Api, realizando una petición GE
 
 `https://a2server.a2system.net:XXXX/api/v1/srv/multimedia/streaming/<id_trabajo>`
 
-ó utilizando las funciones internas de la siguiente manera:
+ó utilizando la Class Api de la siguiente manera:
 
 ```js
   var jobId = " … ";
@@ -256,11 +256,11 @@ La edición de imágenes no necesita de configuración previa pero sí requiere 
   
 Para editar una imagen es necesario especificar un archivo de entrada, las opciones de edición y el archivo de salida.
 
-Para realizar la edicion de una imagen se puede utilizar el REST Api realizando una petición POST a la siguiente URL:
+Para realizar la edición de una imagen se puede utilizar el REST Api realizando una petición POST a la siguiente URL:
 
 `https://a2server.a2system.net:XXXX/api/v1/srv/multimedia/editImage`
 
-   ó utilizando las funciones internas de la siguiente manera:
+   ó utilizando la Class Api de la siguiente manera:
   
 ```js
   var input = { … }; // Imagen de entrada
@@ -284,9 +284,9 @@ Para realizar la edicion de una imagen se puede utilizar el REST Api realizando 
 | Clave | Tipo | Opcional   | Descripción |
 |---|---|:---:|---|
 |input|Object||Contiene la información de donde tomar la imagen de entrada|
-|input.service|String||Servicio de almacenamiento (valores: local, gcloud, aws)|
-|input.container|String||Nombre del Bucket en el servicio.|
-|input.path|String||Path al archivo, relativo al bucket.|
+|input.service|String||Servicio del que cargar el archivo (gcloud, local, aws, url).|
+|input.container|String|X|Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"|
+|input.path|String||Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"|
   
 **- Objeto de salida:**
 
@@ -298,7 +298,7 @@ Para realizar la edicion de una imagen se puede utilizar el REST Api realizando 
 |output.pathPrefix|String||Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.|
 |output.public|Boolean||Indica si el archivo de salida debe ser público o no.|
             
-**- Opciones de edicion:**
+**- Opciones de edición:**
 
 | Clave | Tipo | Opcional   | Descripción |
 |---|---|:---:|---|
@@ -360,7 +360,7 @@ Respuesta:
       "service": "gcloud",
       "container": "gcloud-container",
       "public": true,
-      "url": "https://s3.eu-central-1.amazonaws.com/gcloud-container/modified/rotate.png"
+      "url": "https://s3.eu-central-1.amazonaws.com/gcloud-container/modified/<fileName>"
     }
   ]
 }
@@ -408,7 +408,52 @@ Respuesta:
       "service": "gcloud",
       "container": "gcloud-container",
       "public": true,
-      "url": "https://s3.eu-central-1.amazonaws.com/gcloud-container/modified/crop.png"
+      "url": "https://s3.eu-central-1.amazonaws.com/gcloud-container/modified/<fileName>"
+    }
+  ]
+}
+```
+
+### **- Ejemplo: Rotar imagen desde url**
+
+El siguiente ejemplo muestra cómo rotar una imagen tomada desde una url.
+Para ello se pasará la url del archivo que se vaya a editar.
+Una vez editada la imagen, los archivos generados serán almacenados en el servicio de almacenamiento "gcloud" dentro del contenedor "gcloud-container" en el subpath "modified/". Dicha imagen será pública.
+
+En este caso la imagen será rotada 90 grados en el sentido de las agujas del reloj.
+
+POST: `https://a2server.a2system.net:1234/api/v1/srv/multimedia/editImage`
+
+Body:
+```js
+{
+  "input":{ 
+    "service": "url", 
+    "path": <myImageUrl>
+  },
+  "image":{
+    "rotate": 90
+  },
+  "output":{
+    "service":"gcloud", 
+    "container":"gcloud-container", 
+    "pathPrefix": "modified/", 
+    "public":true
+  }
+
+}
+```
+
+Respuesta:
+```js
+{
+  "images": [
+    {
+      "path": "modified/rotate.png",
+      "service": "gcloud",
+      "container": "gcloud-container",
+      "public": true,
+      "url": "https://s3.eu-central-1.amazonaws.com/gcloud-container/modified/<fileName>"
     }
   ]
 }
