@@ -83,7 +83,7 @@ function createWorkDir(workDir){
     fs.mkdirSync(workDir);
     fs.mkdirSync(workDir + "/tmp");
     resolve(workDir);
-  })
+  });
 }
 
 /**
@@ -105,24 +105,19 @@ function load(input, workDir){
         path: localPath,
         workDir:  workDir,
         name: path.basename(localPath)
-      }
+      };
       resolve(resp);
     }else if(service == 'url'){
-      
-      let imageName = path.basename(input.path) || Math.random().toString(36).slice(2);
-      // imageName = imageName.split('?')[0];
-      // console.log("imageName 1"+imageName);
-      // imageName = decodeURIComponent(imageName);
-      // console.log("imageName 2"+imageName);
-      if(imageName.includes('?')){
-        imageName = imageName.substring(0, imageName.indexOf('?'));
+
+      let imageName = path.basename(input.path);
+      if ( imageName ) {
+        imageName = imageName.split('?')[0];
+        imageName = decodeURIComponent(imageName);
+        imageName = imageName.split('/').pop();
+      } else {
+        imageName = Math.random().toString(36).slice(2);
       }
-      // console.log("imageName 3 "+imageName);
-      // if(imageName.includes('/')){
-      //   imageName = imageName.substring(imageName.lastIndexOf('/'), imageName.length);
-      // }
-      // console.log("imageName 4"+imageName);
-      // 
+
       let dest = path.normalize(workDir + "/" + imageName);
 
       let fileStream = fs.createWriteStream(
