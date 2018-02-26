@@ -109,28 +109,45 @@ function load(input, workDir){
       resolve(resp);
     }else if(service == 'url'){
 
-      let imageName = path.basename(input.path);
-      if ( imageName ) {
-        imageName = imageName.split('?')[0];
-        imageName = decodeURIComponent(imageName);
-        imageName = imageName.split('/').pop();
-      } else {
-        imageName = Math.random().toString(36).slice(2);
-      }
+      let imageName = extractUrlBasename(input.path, Math.random().toString(36).slice(2));
 
       let dest = path.normalize(workDir + "/" + imageName);
 
-      let fileStream = fs.createWriteStream(
-        dest,
-        { defaultEncoding: 'binary' }
-      );
-     let downloader = input.path.match(/^http:\/\//i) ? require('http') : require('https');
+      let downloader = input.path.match(/^http:\/\//i) ? require('follow-redirects').http : require('follow-redirects').https;//require('http') : require('https');
 
       downloader.get( input.path, (resp) => {
+
+        //Si la imagen no tiene extension se intenta obtener de los headers de la petición.
+        let extension = getExtension(imageName);
+        if(!extension){
+          var regexp = /filename=\"(.*)\"/gi;
+          var contentDispositionHeader = resp.headers['content-disposition'];
+          if(contentDispositionHeader){
+            //Una vez obtenida la extension se asigna al nombre de la imagen y se modidifica el path destino de la imagen
+            var filename = regexp.exec( contentDispositionHeader)[1];
+            extension = getExtension(filename);
+            if(extension){
+              imageName += extension;
+              dest += extension;
+            }else{
+               console.warn("No extension found in 'content-disposition'");
+            }
+          }else{
+            console.warn("Needed 'content-disposition' but not found");
+          }
+        }
+
+        let fileStream = fs.createWriteStream(
+          dest,
+          { defaultEncoding: 'binary' }
+        );
+
         resp.pipe(fileStream);
         resp.on('end', (resp) => resolve({path: dest, workDir: workDir, name: imageName}));
       }).on('error', (err) => {
-        fs.unlink(dest, (err) => { log.warn(err) });
+        if(dest){
+          fs.unlink(dest, (err) => { log.warn(err) });
+        }
         reject(err);
       });
 
@@ -156,6 +173,18 @@ function load(input, workDir){
       }
     }
   });
+}
+
+function extractUrlBasename(url, defaultBaseName){
+  let basename = path.basename(url);
+  if ( basename ) {
+    basename = basename.split('?')[0];
+    basename = decodeURIComponent(basename);
+    basename = basename.split('/').pop();
+  } else {
+    basename = defaultBaseName;
+  }
+  return basename;
 }
 
 function save(files, output){
