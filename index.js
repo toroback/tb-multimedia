@@ -50,6 +50,7 @@ class Multimedia {
 
     log.info('new Multimedia');
     let options = _options || defaultOptions;
+    this.options = options;
     this.services = { };
     // at least one option must exist. by now, only transcoder available
     // transcoder
@@ -142,6 +143,7 @@ class Multimedia {
    * @param  {String}   output.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
    * @param  {Boolean}  [output.public]          Indica si el archivo de salida debe ser público o no.
    * @param  {Object}   image                    Las modificaciones a realizar sobre la imagen.
+   * @param  {Boolean}   [image.optimize]    True para optimizar la imagen.
    * @param  {String}   [image.crop]             Tipo de crop que aplicar a la imagen (valores: squared, rounded).
    * @param  {Number}   [image.rotate]           Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
    * @param  {Array}    [image.resize]           Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
@@ -151,8 +153,8 @@ class Multimedia {
   editImage(input, output, image){
     return new Promise( (resolve, reject) => {
       let ImageEditor = require('./imageEditor.js');
-      let imageEditor = new ImageEditor(App, input);
-      imageEditor.edit(image, output)
+      let imageEditor = new ImageEditor(App, this.options ? this.options.editor: undefined);
+      imageEditor.edit(input, image, output)
         .then(resolve)
         .catch(reject);
     });

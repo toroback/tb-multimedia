@@ -664,9 +664,7 @@ function downloadUserFile(input) {
     );
     // choose source (url or bucket)
     if (input.service == 'url') {
-      let downloader = input.path.match(/^http:\/\//i) ? require('http') : require('https');
-
-      downloader.get( input.path, (resp) => {
+      require('./utils').downloadFile(input.path, (resp, data) =>{
         resp.pipe(fileStream);
         resp.on('end', (resp) => resolve(fileName));
       }).on('error', (err) => {

@@ -243,13 +243,59 @@ Respuesta:
 
 Las funciones de edición de imágenes permiten realizar las siguientes opciones:
 
+- Optimizar
 - Redimensionar imagen
 - Crop de imagen
 - Rotar
 
 Todas estas opciones se pueden realizar por separado o en conjunto sobre una misma imagen.
 
-La edición de imágenes no necesita de configuración previa pero sí requiere las funciones de GraphicsMagic.
+La edición de imágenes no necesita de configuración previa obligatoria para todas las opciones pero sí requiere las funciones de GraphicsMagic/ImageMagick.
+
+La opción que requiere configuración es la optimización de imágenes si se requiere uso de servicios de terceros. Para ello, dentro del objeto de configuración del módulo, se necesita añadir un objeto con la siguiente estructura, donde se realizarán las configuraciones necesarias:
+
+```javascript
+  ...
+  "multimediaOptions": {
+    "editor":{
+      
+    }
+  }
+  ...
+```
+
+## Optimización de imagen
+
+Para que una imagen ocupe menos espacio en disco se puede optimizar para reducir su tamaño. Este proceso se puede realizar de manera local, en el servidor, o utilizando algun servicio web de optimización de imágenes. Para ello, si se quiere utilizar servicios externos a Toroback, es necesario configurar dicho servicio en el objeto "editor" de la configuración del módulo.
+
+Por el momento el único servicio externo es *TinyPNG*. Que para configurarlo es necesario añadir el siguiente objeto:
+
+```javascript
+  ...
+  "tinyPng":{
+    "apikey": myApiKey,
+    "optimization":false
+  }
+  ...
+```
+
+En el que se especifica el ApiKey proporcionado por el servicio y si dicho servicio será utilizado por defecto para optimización o no.
+
+Un ejemplo de configuración sería el siguiente:
+
+```javascript
+  ...
+  "multimediaOptions": {
+    "editor":{
+      "tinyPng":{
+        "apikey": "wNX4NMPCX5Vmn7XC3nCCQ7MXXt8Gxxxh",
+        "optimization":true
+      }
+    }
+  }
+  ...
+```
+
 
 
 ## Solicitud de edición de imagen
@@ -303,6 +349,7 @@ Para realizar la edición de una imagen se puede utilizar el REST Api realizando
 | Clave | Tipo | Opcional   | Descripción |
 |---|---|:---:|---|
 |image|Object||Objeto con las modificaciones a realizar sobre la imagen.|
+|image.optimize|Boolean|X|True para realizar optimización de imagen|
 |image.crop|String|X|Tipo de crop que aplicar a la imagen (valores: squared, rounded).|
 |image.rotate|Number|X|Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).|
 |image.resize|Array|X|Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)|
@@ -414,9 +461,9 @@ Respuesta:
 }
 ```
 
-### **- Ejemplo: Rotar imagen desde url**
+### **- Ejemplo: Rotar + Optimizar imagen desde url**
 
-El siguiente ejemplo muestra cómo rotar una imagen tomada desde una url.
+El siguiente ejemplo muestra cómo optimizar y rotar una imagen tomada desde una url.
 Para ello se pasará la url del archivo que se vaya a editar.
 Una vez editada la imagen, los archivos generados serán almacenados en el servicio de almacenamiento "gcloud" dentro del contenedor "gcloud-container" en el subpath "modified/". Dicha imagen será pública.
 
@@ -432,6 +479,7 @@ Body:
     "path": <myImageUrl>
   },
   "image":{
+    "optimize": true
     "rotate": 90
   },
   "output":{

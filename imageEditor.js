@@ -1,7 +1,7 @@
 let fs  = require('fs-extra');
-var gm = require('gm');
+var gm = require('gm').subClass({imageMagick: true});
 let path = require('path');
-
+let utils = require('./utils');
 
 let app;      // reference to toroback
 let log;      // logger (toroback's child)
@@ -18,6 +18,7 @@ const sizesSpec = {
   xl: { size: 1600 }
 }
 
+let defaultOptions = {};
 /**
  * Clase para la edición de imágenes
  * @private
@@ -28,41 +29,42 @@ class ImageEditor{
   /**
    * Crea un editor de imagen
    * @param  {Object} _app Objeto App del servidor
-   * @param  {Object} src  Referencia a la imagen a editar
-   * @param  {String} src.service            Servicio del que cargar el archivo (gcloud, local, aws, url).
-   * @param  {String} [src.container]        Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
-   * @param  {String} src.path               Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
+   * @param  {Object} options Objeto de configuración del servicio de edición de multimedia (multimediaOptions.editor).
    */
-  constructor(_app, src){
+  constructor(_app, options){
     app = _app;      // reference to toroback
     log = _app.log.child({module:'multimedia-imageEditor'});  // logger (toroback's child)
-
-    this.src = src;
+    this.options = options || defaultOptions;
   }
 
   /**
    * Edita la imagen preconfigurada con las opciones dadas
-   * @param  {Object}   options                Las modificaciones a realizar sobre la imagen.
-   * @param  {String}   [options.crop]         Tipo de crop que aplicar a la imagen (valores: squared, rounded).
-   * @param  {Number}   [options.rotate]       Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
-   * @param  {Array}    [options.resize]       Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
-   * @param  {Boolean}  [options.force]        True para forzar la redimension a los tamaños indicados, sino como máximo será el tamaño de la imagen original
-   * @param  {Object}   dest                   Configuración de salida, dónde ubicar la imagen editada.
-   * @param  {String}   dest.service           Servicio de almacenamiento (valores: local, gcloud, aws)
-   * @param  {String}   dest.container         Nombre del Bucket en el servicio. Debe existir.
-   * @param  {String}   dest.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
-   * @param  {Boolean}  [dest.public]          Indica si el archivo de salida debe ser público o no.
+   * @param  {Object}   src                       Referencia a la imagen a editar
+   * @param  {String}   src.service               Servicio del que cargar el archivo (gcloud, local, aws, url).
+   * @param  {String}   [src.container]           Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
+   * @param  {String}   src.path                  Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
+   * @param  {Object}   editOptions               Las modificaciones a realizar sobre la imagen.
+   * @param  {Boolean}   [editOptions.optimize]    True para optimizar la imagen.
+   * @param  {String}   [editOptions.crop]        Tipo de crop que aplicar a la imagen (valores: squared, rounded).
+   * @param  {Number}   [editOptions.rotate]      Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
+   * @param  {Array}    [editOptions.resize]      Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
+   * @param  {Boolean}  [editOptions.force]       True para forzar la redimension a los tamaños indicados, sino como máximo será el tamaño de la imagen original
+   * @param  {Object}   dest                      Configuración de salida, dónde ubicar la imagen editada.
+   * @param  {String}   dest.service              Servicio de almacenamiento (valores: local, gcloud, aws)
+   * @param  {String}   dest.container            Nombre del Bucket en el servicio. Debe existir.
+   * @param  {String}   dest.pathPrefix           Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
+   * @param  {Boolean}  [dest.public]             Indica si el archivo de salida debe ser público o no.
    * @return {Promise<Object>}  Una promesa con el resultado de la edición
    */
-  edit(options, dest){
+  edit(src, editOptions, dest){
     return new Promise( (resolve, reject) => {
       if(!dest || !dest.service || !dest.container){
         reject(new Error("An output must be specified"));
       }else{
         let workDir = defaults.localPath + Math.random().toString(36).slice(2);
         createWorkDir(workDir)
-          .then(workDir =>  load(this.src, workDir))
-          .then(file => modifyImage(file, options))
+          .then(workDir =>  load(src, workDir))
+          .then(file => modifyImage(file, editOptions, this.options))
           .then(files => save(files, dest))
           .then(resolve)
           .catch(reject)
@@ -93,6 +95,7 @@ function createWorkDir(workDir){
  * @param  {String} input.service Servicio del que cargar el archivo (gcloud, local, aws, url).
  * @param  {String} [input.container] Contedor del archivo. Solo para los servicios de almacenamiento. No es necesario para service="url"
  * @param  {String} input.path Path del archivo relativo al contenedor para servicios de almacenamiento o url si es service="url"
+ * @param  {String} workDir Path del directorio base de trabajo
  * @return {Promise<Object>}  Promesa con el resultado de carlar la imagen fuente
  */
 function load(input, workDir){
@@ -110,30 +113,20 @@ function load(input, workDir){
     }else if(service == 'url'){
 
       let imageName = extractUrlBasename(input.path, Math.random().toString(36).slice(2));
-
       let dest = path.normalize(workDir + "/" + imageName);
 
-      let downloader = input.path.match(/^http:\/\//i) ? require('follow-redirects').http : require('follow-redirects').https;//require('http') : require('https');
-
-      downloader.get( input.path, (resp) => {
-
-        //Si la imagen no tiene extension se intenta obtener de los headers de la petición.
+      utils.downloadFile(input.path, (resp, data) =>{
+        console.log("Download data", JSON.stringify(data));
+        
         let extension = getExtension(imageName);
         if(!extension){
-          var regexp = /filename=\"(.*)\"/gi;
-          var contentDispositionHeader = resp.headers['content-disposition'];
-          if(contentDispositionHeader){
-            //Una vez obtenida la extension se asigna al nombre de la imagen y se modidifica el path destino de la imagen
-            var filename = regexp.exec( contentDispositionHeader)[1];
-            extension = getExtension(filename);
-            if(extension){
-              imageName += extension;
-              dest += extension;
-            }else{
-               console.warn("No extension found in 'content-disposition'");
-            }
-          }else{
-            console.warn("Needed 'content-disposition' but not found");
+          extension = utils.extensionForContentType(data.contentType);
+          if(!extension){
+            extension = getExtension(data.filename);        
+          }
+          if(extension){
+            imageName += extension;
+            dest += extension;
           }
         }
 
@@ -150,6 +143,7 @@ function load(input, workDir){
         }
         reject(err);
       });
+
 
     }else{
       let imageName = path.basename(input.path);
@@ -240,10 +234,17 @@ function uploadFile(file, output){
   });
 }
 
-function modifyImage(image, edit){
+function modifyImage(image, edit, configOptions){
   return new Promise( (resolve, reject) => {
     // modifica la imagen con la informacion de edit
     Promise.resolve(image.path)
+      .then(imagePath =>{
+        if(edit.optimize){
+          return optimize(imagePath, image.workDir, configOptions);
+        }else{
+          return Promise.resolve(imagePath);
+        }
+      })
       .then(imagePath =>{
         if(edit.rotate){
           return rotate(imagePath, image.workDir, edit.rotate);
@@ -267,6 +268,92 @@ function modifyImage(image, edit){
       })
       .then(resolve)
       .catch(reject);
+  });
+}
+
+
+function optimize(imagePath, destPath, configOptions){
+  return new Promise( (resolve, reject) => {
+    let fileName = path.basename(imagePath);
+    var destFile = destPath+"/tmp/"+fileName;
+    var service = getOptimizationService(configOptions);
+  
+    var optimizePromise;
+    if(!service || service == "local"){
+      optimizePromise = localOptimization(imagePath, destFile);
+    }else if(service == "tinyPng"){
+      optimizePromise = tinyPngOptimize(imagePath, destFile, configOptions[service])
+    }else{
+      reject("Optimization service not supported - " + service);
+    }
+
+    if(optimizePromise){
+      optimizePromise.then(res => resolve(res)).catch(reject);
+    }
+  });
+}
+
+/**
+ * Devuelve el servicio configurado para optimizar imágenes o "local" si no hay ninguno
+ * @param  {[type]} configOptions [description]
+ * @return {[type]}               [description]
+ */
+function getOptimizationService(configOptions){
+  var service;
+  Object.keys(configOptions).forEach( key => {
+    if(!service && configOptions[key].optimization){
+      service = key;
+    }
+  });
+  return service || "local";
+}
+
+/**
+ * Optimización local usando ImageMagick
+ * @param  {String} imagePath Path de la imagen a optimizar
+ * @param  {String} destFile  Path donde se almacenará la imagen modificada
+ * @param  {Object} serviceOptions  Opciones del servicio de TinyPNG
+ * @return {Promise}         Promesa a la ubicacion de la imagen modificada
+ */
+function tinyPngOptimize(imagePath, destFile, serviceOptions){
+  return new Promise( (resolve, reject) => {
+    if(serviceOptions && serviceOptions.apikey){
+      var tinify = require("tinify");
+      tinify.key = serviceOptions.apikey;
+
+      tinify.fromFile(imagePath)
+        .toFile(destFile)
+        .then(res =>resolve(destFile))
+        .catch(reject);
+      
+    }else{
+      reject("Optimization service not configured");
+    }
+  });
+}
+
+/**
+ * Optimización local usando ImageMagick
+ * @param  {String} imagePath Path de la imagen a optimizar
+ * @param  {String} destFile  Path donde se almacenará la imagen modificada
+ * @return {Promise}          Promesa a la ubicacion de la imagen modificada
+ */
+function localOptimization(imagePath, destFile){
+  return new Promise( (resolve, reject) => {
+    //Se extrae el formato para no basarnos en la extension del archivo
+    gm(imagePath).format(function(err, format){
+      if(err) reject(err);
+      else{
+        var optimizePromise;
+        format = format.toLowerCase();
+        if(format == 'jpeg'){
+          optimizePromise = gmWrite(gm(imagePath).samplingFactor(2,2).strip().quality(70).interlace("JPEG").define("jpeg:dct-method=float").colorspace("sRGB"), destFile)
+        }else{
+          optimizePromise = gmWrite(gm(imagePath).strip(), destFile)
+        }
+        optimizePromise.then(res => resolve(res)).catch(reject);
+      }
+    });
   });
 }
 

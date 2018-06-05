@@ -118,6 +118,7 @@ function setupRoutes(App){
    * @bodyparam  {String}   output.pathPrefix        Prefijo de ruta donde ubicar los archivos de salida. Relativo al bucket.
    * @bodyparam  {Boolean}  [output.public]          Indica si el archivo de salida debe ser público o no.
    * @bodyparam  {Object}   image                    Las modificaciones a realizar sobre la imagen.
+   * @bodyparam  {Boolean}   [image.optimize]    True para optimizar la imagen.
    * @bodyparam  {String}   [image.crop]             Tipo de crop que aplicar a la imagen (valores: squared, rounded).
    * @bodyparam  {Number}   [image.rotate]           Rotación a aplicar a la imagen en grados. (Ej. 90, 270, 180).
    * @bodyparam  {Array}    [image.resize]           Array con los tamaños de la imagen a generar. (valores: t, s, m, l, xl)
