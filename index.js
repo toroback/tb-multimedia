@@ -159,6 +159,45 @@ class Multimedia {
         .catch(reject);
     });
   }
+
+  upload(payload){
+    return new Promise( (resolve, reject) => {
+      this.getReferenceConfig(payload.reference)
+        .then(refConfig => {
+          var serviceObject = App.Storage.toServiceObject({reference: refConfig.storageReference, path: payload.file.originalname});
+          if(serviceObject){
+            var uploadPayload = Object.assign({}, serviceObject);
+            uploadPayload.file = payload.file;
+            uploadPayload.public = true;
+
+            var Storage = new App.Storage(serviceObject.service);
+            Storage.uploadFile(uploadPayload) 
+              .then(res =>{
+                console.log("original image: " +JSON.stringify(res));
+                //TODO: Acá se guardaría el resultado de la subida
+                return Promise.resolve(res);
+              })
+              .then(res =>{
+                var output = Object.assign({public: true}, serviceObject);
+                return this.editImage({file: payload.file}, output, {crop: "rounded", resize:["l", "m"]} )
+              })
+              .then(resolve)
+              .catch(reject);
+          }
+        })
+        .catch(reject);
+    });
+  }
+
+  getReferenceConfig(reference){
+    return new Promise( (resolve, reject) => {
+      if(this.options.references && this.options.references[reference]){
+        resolve(this.options.references[reference]);
+      }else{
+        reject("reference not exists "+reference);
+      }
+    });
+  }
   
 }
 

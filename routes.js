@@ -1,14 +1,17 @@
-let router = new require('express').Router();
+
+let router = require('express').Router();
 
 // TODO: this require needs to be fixed. re-structure.
 let Multimedia = require('./index.js');
 let mm = new Multimedia( );
 
-
+let log;
 /**
  * @module tb-multimedia/routes
  */
 function setupRoutes(App){
+  log = App.log.child({module:'multimediaRoute'});
+
   router.use( (req, res, next) => {
     req._ctx['service']  = "multimedia";
     req._ctx['resource']  = req.query.service;
@@ -141,6 +144,21 @@ function setupRoutes(App){
   });
 
 
+  router.post("/upload", App.Storage.multer.single('fileUpload'), function(req, res, next){
+    log.trace("entra en upload file");
+    log.debug(req.file);
+
+    var ctx = req._ctx;
+
+    var payload = {
+      file: req.file
+    }
+    Object.assign(payload, req.query);
+
+    mm.upload(payload)
+      .then(resp => res.status(200).json(resp))
+      .catch(next);
+  });  
 
 
   App.app.use(`${App.baseRoute}/srv/multimedia`, router);

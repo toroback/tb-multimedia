@@ -100,70 +100,87 @@ function createWorkDir(workDir){
  */
 function load(input, workDir){
   return new Promise( (resolve, reject) => {
-    let service = input.service;    
-
-    if(service == 'local'){ //Si la imagen está en local si obtiene el path local desde tb-storage y se devuelve
-      let localPath = app.Storage.getLocalPath(input.container, input.path);
-      let resp = {
-        path: localPath,
-        workDir:  workDir,
-        name: path.basename(localPath)
-      };
-      resolve(resp);
-    }else if(service == 'url'){
-
-      let imageName = extractUrlBasename(input.path, Math.random().toString(36).slice(2));
-      let dest = path.normalize(workDir + "/" + imageName);
-
-      utils.downloadFile(input.path, (resp, data) =>{
-        console.log("Download data", JSON.stringify(data));
-        
-        let extension = getExtension(imageName);
-        if(!extension){
-          extension = utils.extensionForContentType(data.contentType);
-          if(!extension){
-            extension = getExtension(data.filename);        
-          }
-          if(extension){
-            imageName += extension;
-            dest += extension;
-          }
+    if(input.file){
+      // var extension = utils.extensionForContentType(input.file.mimetype);
+      var fileName = input.file.originalname;//path.basename(input.file.path) + (extension ? "."+extension : "");
+      let destPath = workDir + "/" + fileName;
+      console.log("Loading file" +JSON.stringify(input))
+      fs.move(input.file.path, destPath, err =>{
+        if(err) reject(err)
+        else{
+          resolve({
+            path: destPath,
+            workDir:  workDir,
+            name: fileName
+          });
         }
+      });
+    }else{
+      let service = input.service;    
+
+      if(service == 'local'){ //Si la imagen está en local si obtiene el path local desde tb-storage y se devuelve
+        let localPath = app.Storage.getLocalPath(input.container, input.path);
+        let resp = {
+          path: localPath,
+          workDir:  workDir,
+          name: path.basename(localPath)
+        };
+        resolve(resp);
+      }else if(service == 'url'){
+
+        let imageName = extractUrlBasename(input.path, Math.random().toString(36).slice(2));
+        let dest = path.normalize(workDir + "/" + imageName);
+
+        utils.downloadFile(input.path, (resp, data) =>{
+          console.log("Download data", JSON.stringify(data));
+          
+          let extension = getExtension(imageName);
+          if(!extension){
+            extension = utils.extensionForContentType(data.contentType);
+            if(!extension){
+              extension = getExtension(data.filename);        
+            }
+            if(extension){
+              imageName += extension;
+              dest += extension;
+            }
+          }
+
+          let fileStream = fs.createWriteStream(
+            dest,
+            { defaultEncoding: 'binary' }
+          );
+
+          resp.pipe(fileStream);
+          resp.on('end', (resp) => resolve({path: dest, workDir: workDir, name: imageName}));
+        }).on('error', (err) => {
+          if(dest){
+            fs.unlink(dest, (err) => { log.warn(err) });
+          }
+          reject(err);
+        });
+
+
+      }else{
+        let imageName = path.basename(input.path);
+        let dest = path.normalize(workDir + "/" + imageName);
 
         let fileStream = fs.createWriteStream(
           dest,
           { defaultEncoding: 'binary' }
         );
-
-        resp.pipe(fileStream);
-        resp.on('end', (resp) => resolve({path: dest, workDir: workDir, name: imageName}));
-      }).on('error', (err) => {
-        if(dest){
-          fs.unlink(dest, (err) => { log.warn(err) });
+        //TODO: cargar el archivo del servicio que sea necesario
+        let storage  = new app.Storage(service);
+        if (storage) {
+          storage.downloadFile({ container: input.container, path: input.path, res: fileStream })
+            .then( res =>  resolve({path: dest, workDir: workDir, name: imageName}))
+            .catch( (err) => {
+              fs.unlink(dest, (err) => { log.warn(err) });
+              reject(err);
+            });
+        }else {
+          reject(new Error('Input storage not configured: ' + service));
         }
-        reject(err);
-      });
-
-
-    }else{
-      let imageName = path.basename(input.path);
-      let dest = path.normalize(workDir + "/" + imageName);
-
-      let fileStream = fs.createWriteStream(
-        dest,
-        { defaultEncoding: 'binary' }
-      );
-      //TODO: cargar el archivo del servicio que sea necesario
-      let storage  = new app.Storage(service);
-      if (storage) {
-        storage.downloadFile({ container: input.container, path: input.path, res: fileStream })
-          .then( res =>  resolve({path: dest, workDir: workDir, name: imageName}))
-          .catch( (err) => {
-            fs.unlink(dest, (err) => { log.warn(err) });
-            reject(err);
-          });
-      }else {
-        reject(new Error('Input storage not configured: ' + service));
       }
     }
   });
@@ -236,6 +253,7 @@ function uploadFile(file, output){
 
 function modifyImage(image, edit, configOptions){
   return new Promise( (resolve, reject) => {
+    console.log("Edit options "+ JSON.stringify(edit));
     // modifica la imagen con la informacion de edit
     Promise.resolve(image.path)
       .then(imagePath =>{
