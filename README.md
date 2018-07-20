@@ -7,11 +7,17 @@ Este módulo ofrece distintas funcionalidades multimedia. Algunas de ellas son:
 
 ## Instalación y configuración
 
- **IMPORTANTE:** Algunas de las funciones de tb-multimedia, como la edición de imágenes, requieren tener instalado Graphic's Magick en el servidor.
+ **IMPORTANTE:** Algunas de las funciones de tb-multimedia, como la edición de imágenes, requieren tener instalado Graphic's Magick e ImageMagick en el servidor.
 
   Para más información sobre cómo instalarlo consultar la página web: http://www.graphicsmagick.org
 
   En primer lugar vamos a explicar como se realiza la configuración del módulo para poder utilizarlo, aunque no todas las funciones requieren de ella.
+
+  Además es importante inicializar la librería en el archivo "boot.js" dentro de app para que estén disponibles los distintos modelos que ofrece el módulo. Para ello incluir la siguiente linea de código dentro de la función Boot:
+
+  ```javscript
+  App.Multimedia.init();
+  ```
 
 ### **- Configuración manual:**
 
@@ -506,3 +512,118 @@ Respuesta:
   ]
 }
 ```
+
+# Subida de imágenes con edición
+
+Esta función permite subir un archivo e indicar de manera sencilla la ubicación en la que se almacenará y la edición a aplicar. Esto se realiza usando unas referencias previamente declaradas que contendrán esa información.
+
+La declaración de una referencia se realiza en el archivo **"config.json"** del proyecto, en el objeto **"multimediaOptions.editor"**. Para más informacion ver la sección "Configuración manual".
+
+Para ello hay que agregar un objeto **"references"** que contendrá dichas referencias representadas por objetos, donde el key de cada subobjeto será el identificador de la referencia.
+Cada referencia es un objeto que contendrá una referencia de almacenamiento utilizada por el módulo "Storage" y un array llamado **"editOptions"** que contendrá tantos objetos con los distintos parámetros que se pueden utilizar en la sección **"Edición de Imágenes"** como ediciones se quieren aplicar.
+
+Un ejemplo es el siguiente:
+
+```js
+{
+  ...
+
+  "multimediaOptions":{
+    "editor":{
+      ...
+      "references": {
+        "myRef1": {
+          "storageReference": "myStorageReference",
+          "editOptions": [{ "optimize":true, "crop": "rounded", "resize": ["t", "s", "m"] }]
+        }
+      }
+      ...
+    }
+  }
+
+  ...
+}
+```
+
+## **• REST Api:**
+
+**Petición:**
+
+|HTTP Method|URL|
+|:---:|:---|
+|POST Multipart |`https://[domain]:[port]/api/v[apiVersion]/srv/multimedia/upload?reference=<reference>[&public=<true,false>]` |
+  
+
+**Parámetros del query:**
+
+| Clave | Tipo | Opcional   | Descripción  |
+|---|---|:---:|---|
+|reference|String|X|Referencia a una ubicación. (Para más información ver "Uso de Referencias" del modulo Storage)|
+|public|Boolean|X|Flag que indica si el contenedor va a ser público. Por defecto es false.|
+
+**Parámetros Multipart:**
+
+| Clave | Tipo | Opcional   | Descripción  |
+|---|---|:---:|---|
+|path|String||Path destino relativo al contenedor del archivo que se va a subir incluyendo el nombre y extensión del mismo.|
+|fileUpload|File|| Archivo que se va a subir.|
+
+>NOTA: Es necesario pasar una de las dos opciones. Servicio y contenedor ó referencia.
+
+**Respuesta:**
+
+| Clave | Tipo | Opcional   | Descripción  |
+|---|---|:---:|---|
+|file|tb.multimedia-files|| Objeto con la información del archivo subido|
+
+**Ejemplo:**
+
+* POST: 
+
+`https://a2server.a2system.net:1234/api/v1/srv/multimedia/upload?reference=myRef1&public=true`
+
+* DATOS multipart:
+
+```
+ "path" : "subfolder/file.png"
+ "fileUpload": El archivo a subir
+```
+
+
+# Declaración de tamaños.
+
+Por defecto existen los siguientes tamaños predefinidos :
+```
+  t:  { w: 160, h: 160 },
+  s:  { w: 240, h: 240 },
+  m:  { w: 640, h: 640 },
+  l:  { w: 1280, h: 1280 },
+  xl: { w: 1600, h: 1600 }
+```
+
+Pero se pueden declarar nuevos tamaños a utilizar declarándolos en el archivo **"config.json"** del proyecto, en el objeto **"multimediaOptions.editor"**. Para más informacion ver la sección "Configuración manual".
+
+Para ello es necesario añadir un objeto **"sizes"** que contendrá pares clave-valor  donde la clave será el identificador del tamaño y el valor será un String con las dimensiones con el siguiente formato "WxH".
+
+Un ejemplo es el siguiente:
+
+```js
+{
+  ...
+
+  "multimediaOptions":{
+    "editor":{
+      ...
+      "sizes": {
+        "mySize1": "500x500",
+        "mySize2": "750x750"
+      }
+      ...
+    }
+  }
+
+  ...
+}
+```
+
+Para utilizarlas se puede añadir el identificador al array de tamaños **"resize"** utilizado en la edición de imágenes
