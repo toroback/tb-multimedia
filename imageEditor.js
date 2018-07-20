@@ -1,7 +1,11 @@
 let fs  = require('fs-extra');
-var gm = require('gm').subClass({imageMagick: true});
+var gm = require('gm');
+var im = gm.subClass({imageMagick: true});
 let path = require('path');
 let utils = require('./utils');
+let removeDiacritics = require('diacritics').remove;
+let mongoose  = require('mongoose');
+let submodels  = require("./resources/submodels.js");
 
 let app;      // reference to toroback
 let log;      // logger (toroback's child)
@@ -10,13 +14,20 @@ let defaults = {
   localPath:   'storage/'
 }
 
-const sizesSpec = {
-  t:  { size: 160 },
-  s:  { size: 240 },
-  m:  { size: 640 },
-  l:  { size: 1280 },
-  xl: { size: 1600 }
+let sizesSpec = {
+  t:  { w: 160, h: 160 },
+  s:  { w: 240, h: 240 },
+  m:  { w: 640, h: 640 },
+  l:  { w: 1280, h: 1280 },
+  xl: { w: 1600, h: 1600 }
 }
+// const sizesSpec = {
+//   t:  { size: 160 },
+//   s:  { size: 240 },
+//   m:  { size: 640 },
+//   l:  { size: 1280 },
+//   xl: { size: 1600 }
+// }
 
 let defaultOptions = {};
 /**
@@ -35,6 +46,17 @@ class ImageEditor{
     app = _app;      // reference to toroback
     log = _app.log.child({module:'multimedia-imageEditor'});  // logger (toroback's child)
     this.options = options || defaultOptions;
+    this.readCustomSizes();
+  }
+
+  readCustomSizes(){
+    if(this.options.sizes){
+      var customSizes = this.options.sizes;
+      for (var key in customSizes) {
+        var size = customSizes[key];
+        if(size)  sizesSpec[key] = extractSizes(size);
+      }
+    }
   }
 
   /**
@@ -72,6 +94,132 @@ class ImageEditor{
       }
     });
   }
+
+
+ /**
+   * Sube una imagen a la ubicación indicada y la transforma segun las referencias pasadas. Devuelve un objeto con la imagen original y todas las transformaciones
+   * @param  {Object}   payload                   Referencia a la imagen a editar
+   * @param  {String}   payload.path              Ubicación en la que se almacenará la imagen y sus transformaciones. Ubación relativa a la referencia.   
+   * @param  {File}     payload.file              Archivo que se va a subir
+   * @param  {String}   payload.reference         Identificador de la referencia declarada en la configuración del módulo que contiene la especificación de las transformaciones
+   * @param  {boolean}  payload.public            Flag que indica si el archivo será public
+   * @return {Promise<tb.multimedia-files>}       Una promesa con el resultado de la subida 
+   */
+  upload(payload){
+    return new Promise( (resolve, reject) => {
+      log.debug("Multimedia Upload payload" +  JSON.stringify(payload));
+      let file = payload.file;
+      //Variables completadas en las respuestas de las promesas
+      let refConfig, serviceObject, originalUploadedFile, slug, multimediaFile, fileSize; 
+      let fileName = payload.path ? path.basename(payload.path) : file.originalname;
+      let pathPrefix   = payload.path ? path.dirname(payload.path) + "/" : undefined;
+      let isPublic = payload.public != undefined ? payload.public == true : true;
+      //En primer lugar se obtiene la configuracion de la referencia y el slug del nombre del archivo.
+      Promise.all([
+          this.getReferenceConfig(payload.reference),
+          buildSlug(fileName.substring(0, fileName.lastIndexOf("."))),
+          getFileSize(file.path)
+        ])
+        .then(res =>{
+          log.debug("Loaded start data");
+          refConfig = res[0];
+          slug = res[1];
+          fileSize = res[2];
+          
+          //Se realiza la subida del archivo
+          serviceObject = app.Storage.toServiceObject({reference: refConfig.storageReference, path: pathPrefix || ""});
+          
+          if(!serviceObject)  throw app.err.notFound("Storage reference not found");
+          
+          var upload = Object.assign({}, serviceObject);
+          upload.file = file;
+          upload.public = isPublic;
+
+          //Se establece la ubicacion final del archivo para la subida, uniendo el path que devuelve el service object junto al nombre del archivo y la extension;
+          upload.path = path.join(serviceObject.path, slug + (utils.extensionForContentType(file.mimetype) || ""));
+
+          // log.debug("Storage Upload payload" +  JSON.stringify(upload));
+          var Storage = new app.Storage(serviceObject.service);
+          return Storage.uploadFile(upload) 
+          
+        })
+        .then(res =>{
+          log.debug("Original file uploaded");
+          // Se guarda el resultado de la subida del archivo original
+          originalUploadedFile = res.file;
+        
+          let MultimediaFile = app.db.model('tb.multimedia-files');
+          multimediaFile = new MultimediaFile({
+            service: originalUploadedFile.service,
+            container: originalUploadedFile.container,
+            public: originalUploadedFile.public,
+            path: originalUploadedFile.path,
+            url: originalUploadedFile.url,
+            slug: slug,
+            mime: file.mimetype,
+            w: fileSize.width,
+            h: fileSize.height,
+            size: file.size
+          });
+         
+          return multimediaFile.save();
+        })
+        .then(doc =>{
+           log.debug("Media file saved");
+          //Se realiza la transformacion
+          var output = Object.assign({public: isPublic}, serviceObject);
+          output.pathPrefix = serviceObject.path;
+          
+          var prom = refConfig.editOptions.map( e => {
+            var editOptions = Object.assign({}, e);
+            editOptions.namePrefix = slug;
+            //Si no se especifica la optimizacion en las opciones, por defecto hacemos que se optimice
+            if(editOptions.optimize == undefined) editOptions.optimize = true;
+            return this.edit({file: file}, editOptions, output).catch(err => {return Promise.resolve()});
+          });
+
+          return Promise.all(prom);
+        })
+        .then( res=>{
+          //res = [ {images: [{image1, image2 }]}, {images:[image1, imageX]} ,...]
+          //Acá se guardan las imágenes transformadas
+          let SubMediaFile = mongoose.model('MediaFile', submodels.mediaFile);
+          var avSizes = [];
+          for(var i = 0; i < res.length; i++ ){
+            if(res[i] && res[i].images) {
+              var images = res[i].images;
+              for(var j = 0; j < images.length; j++ ){
+                var subfile = images[j];
+                if(subfile){
+                  //TODO: Por ahora se establece las dimensiones en funciona la que nos pidieron, hay que buscar la manera de extraerla del documento
+                  let sizeSpec = sizesSpec[subfile.size];
+                  let mediaFile = new SubMediaFile({ path: subfile.path, url: subfile.url, w: sizeSpec.w, h: sizeSpec.h});
+                  //Se asocia un nuevo media file por cada tamaño con el key 's_<tamaño>'
+                  multimediaFile.set('s_'+subfile.size, mediaFile);
+
+                  avSizes.push(subfile.size);
+                }
+              }
+            }
+          }
+          if(avSizes.length) multimediaFile.set('sizes', avSizes);
+         
+          return multimediaFile.save();
+        })
+        .then(resolve)
+        .catch(reject);
+    });
+  }
+
+  getReferenceConfig(reference){
+    return new Promise( (resolve, reject) => {
+      if(this.options.references && this.options.references[reference]){
+        resolve(this.options.references[reference]);
+      }else{
+        reject("reference not exists "+reference);
+      }
+    });
+  }
 }
 
 /**
@@ -85,6 +233,19 @@ function createWorkDir(workDir){
     fs.mkdirSync(workDir);
     fs.mkdirSync(workDir + "/tmp");
     resolve(workDir);
+  });
+}
+
+function getFileSize(filePath){
+  return new Promise((resolve, reject) =>{
+    let gmTask = gm(filePath);
+    gmTask.size((err, size) => {
+      if(err){
+        reject(err);
+      }else{
+        resolve(size);
+      }
+    });
   });
 }
 
@@ -105,7 +266,7 @@ function load(input, workDir){
       var fileName = input.file.originalname;//path.basename(input.file.path) + (extension ? "."+extension : "");
       let destPath = workDir + "/" + fileName;
       console.log("Loading file" +JSON.stringify(input))
-      fs.move(input.file.path, destPath, err =>{
+      fs.copy(input.file.path, destPath, err =>{
         if(err) reject(err)
         else{
           resolve({
@@ -260,28 +421,28 @@ function modifyImage(image, edit, configOptions){
         if(edit.optimize){
           return optimize(imagePath, image.workDir, configOptions);
         }else{
-          return Promise.resolve(imagePath);
+          return imagePath;
         }
       })
       .then(imagePath =>{
         if(edit.rotate){
           return rotate(imagePath, image.workDir, edit.rotate);
         }else{
-          return Promise.resolve(imagePath);
+          return imagePath;
         }
       })
       .then(imagePath => {     
         if(edit.crop){
            return crop(imagePath, image.workDir, edit.crop)
         }else{
-          return Promise.resolve(imagePath)
+          return imagePath;
         }
       })
       .then(editPath => {
         if(edit.resize){
-          return performResize(editPath, image.workDir, edit.resize, edit.force);
+          return performResize(editPath, image.workDir, edit.resize, edit.force, edit.namePrefix);
         }else{
-          return Promise.resolve([{path: editPath}]);
+          return [{path: editPath}];
         }
       })
       .then(resolve)
@@ -365,7 +526,7 @@ function localOptimization(imagePath, destFile){
         var optimizePromise;
         format = format.toLowerCase();
         if(format == 'jpeg'){
-          optimizePromise = gmWrite(gm(imagePath).samplingFactor(2,2).strip().quality(70).interlace("JPEG").define("jpeg:dct-method=float").colorspace("sRGB"), destFile)
+          optimizePromise = gmWrite(im(imagePath).samplingFactor(2,2).strip().quality(70).interlace("JPEG").define("jpeg:dct-method=float").colorspace("sRGB"), destFile)
         }else{
           optimizePromise = gmWrite(gm(imagePath).strip(), destFile)
         }
@@ -462,9 +623,11 @@ function gmWrite(gmTask, path){
 }
 
 
-function performResize(pathOrig, pathDest, sizes, force = false){
+function performResize(pathOrig, pathDest, sizes, force = false, namePrefix){
   return new Promise(function(resolve, reject){
+    if(!Array.isArray(sizes)) throw new app.err.notAcceptable("'resize' must be an array");
     //Se obtiene el tamaño original para limitar el resize que no sea mas grande
+    let ext = getExtension(pathOrig);
     gm(pathOrig).size((err, originalSize) => { 
       if(err) throw err;
       
@@ -472,11 +635,14 @@ function performResize(pathOrig, pathDest, sizes, force = false){
       sizes.forEach( size => {
         let lowerCaseKey = size.toLocaleString();
         let sizeSpec = sizesSpec[lowerCaseKey];
+        if(!sizeSpec) sizeSpec = extractSizes(lowerCaseKey);
         if(sizeSpec){
-          let width = force ? sizeSpec.size : Math.min(sizeSpec.size, originalSize.width);
-          let height = force ? sizeSpec.size : Math.min(sizeSpec.size, originalSize.height); 
-          let ext = getExtension(pathOrig);
-          let prom = resize(pathOrig, pathDest+"/"+lowerCaseKey+ext, width, height)
+          let width = force ? sizeSpec.w : Math.min(sizeSpec.w, originalSize.width);
+          let height = force ? sizeSpec.h : Math.min(sizeSpec.h, originalSize.height); 
+          
+          var destName = lowerCaseKey+ext;
+          if(namePrefix) destName = namePrefix +"_"+destName;
+          let prom = resize(pathOrig, pathDest+"/"+destName, width, height)
                       .then(path => {return {path: path, size: size}});
           promises.push(prom);
         }
@@ -489,16 +655,35 @@ function performResize(pathOrig, pathDest, sizes, force = false){
   });
 }
 
+function extractSizes(string){
+  var parts = string.split('x');
+  if(parts.length){
+    var w = parts[0];
+    var h = parts[1] || w;
+    if(!isNaN(w) && !isNaN(h)){
+      return {w:w, h:h};
+    }
+  }
+  return undefined;
+}
+
 /**
  * Redimensiona la imagen en pathOrig con los tamaños pasados y la guarda en pathDest
  * @private
  */
 //http://www.imagemagick.org/Usage/resize/ para mas detalles sobre la funcion y las opciones
-function resize(pathOrig, pathDest, width , height ){
+function resize(pathOrig, pathDest, width , height, force ){
   return new Promise(function(resolve, reject){
+    // let gmTask = im(pathOrig);
+    // if(force){
+    //   gmTask.resize(width, height, "!");
+    // }else{
+      // gmTask.resize(width, height);
+    // }
+     log.debug("Resize to "+ width+"x"+height);
     gm(pathOrig)
-    .resize(width, height)
-    .write(pathDest, function (err) {
+      .resize(width, height)
+      .write(pathDest, function (err) {
       if (err) reject(err);
       else resolve(pathDest);
     });
@@ -508,5 +693,49 @@ function resize(pathOrig, pathDest, width , height ){
 function getExtension(filePath){
   return path.extname(filePath);
 }
+
+// builds a slug for a multimedia file from the file name
+// name: file name to build slug from. path and extensions are removed if passed in name
+// return: slug string
+//
+// makes sure slug doesn't exist in DB already. 
+// auto-increases counter in slug if needed
+function buildSlug( name ) {
+  return new Promise( (resolve, reject) => {
+    let MMFile = app.db.model( 'tb.multimedia-files' );
+    let regexp;
+    let slug;
+
+    // parse from path (remove paths and extension), if not undefined
+    slug = name ? name.split('/').pop( ).split('.')[0] : '';
+    // clean up
+    if ( slug ) {
+      slug = removeDiacritics( name ).toLowerCase( )  // no diacritics, lowercase
+                .replace(/[^A-Za-z0-9\s\-\_\/]/g, '')  // keep only characters in range
+                .replace(/[\s\-\_\/]+/g, '-'); // remove dash duplicity
+    }
+    // it could be empty here after cleaning up
+    slug = slug || (Math.random() + Number.EPSILON).toString(36).substr(2, 16); // + epsilon, avoid empty string. already lowercase
+                   
+    // match '<slug>' or '<slug>-<counter>' slugs in DB
+    regex = new RegExp( '^' + slug + '(-\\d+$|$)' ); // all already lowercase (double slash on string building. single slash on regex \d)
+
+    // make sure it doesn't exist in DB already. find them all
+    MMFile.find( { 'slug': regex }, { 'slug': 1 } )    
+      .then( mmFiles => {
+        // if exact same string exists, we need to create a new slug
+        if ( mmFiles.find( e => e.slug == slug ) ) {
+          // find largest counter, and increment by 1 (from format: <slug>-<counter>)
+          let num = mmFiles.map( e => Number( e.slug.split('-').pop( ) ) || 0 ) // add 0 to array if NaN
+                           .sort( (a,b) => (a - b)).pop( ) + 1;
+          slug = slug + '-' + num;
+        } // else: no exact match, we can return slug as it is
+        return slug;
+      })
+      .then(resolve)
+      .catch(reject);
+  });
+}
+/// END TEST
 
 module.exports = ImageEditor;

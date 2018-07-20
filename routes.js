@@ -144,6 +144,30 @@ function setupRoutes(App){
   });
 
 
+  /**
+   * Sube un archivo, lo edita y lo almacena segun la referencia indicada. Post en formato multipart
+   *
+   * @name Upload file
+   *
+   * @route  {POST} srv/multimedia/upload
+   * 
+   * @queryparam {String} [reference] Referencia que especifica la ubicación de almacenamiento y las ediciones a aplicar (Ej: "myReference")
+   *
+   * @queryparam {String} [public]    "true" Para indicar que el archivo será público. Cualquier otro valor será tomado como no public, Por defecto es público.
+   * 
+   * @bodyparam  {File}   fileUpload  Archivo que se va a subir
+   * @bodyparam  {String} path        Path destino del archivo incluyendo el nombre y extension. Ejemplos: "filename.png", "subdir/filename.png"
+   * 
+   * @return {Object}  Informacion del archivo subido 
+   *
+   * @example: 
+   *   UPLOAD: http://localhost:4524/api/v1/srv/multimedia/upload?reference=myReference
+   *   DATOS multipart:
+   *        - "path" : "subfolder/file.png"
+   *        - "fileUpload": El archivo a subir
+   *
+   *          
+   */
   router.post("/upload", App.Storage.multer.single('fileUpload'), function(req, res, next){
     log.trace("entra en upload file");
     log.debug(req.file);
@@ -151,12 +175,14 @@ function setupRoutes(App){
     var ctx = req._ctx;
 
     var payload = {
-      file: req.file
+      file: req.file,
+      path: req.body.path,
+      reference: req.query.reference,
+      public: req.query.public == "true"
     }
-    Object.assign(payload, req.query);
-
+    
     mm.upload(payload)
-      .then(resp => res.status(200).json(resp))
+      .then(resp => res.json(resp))
       .catch(next);
   });  
 

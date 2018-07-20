@@ -39,6 +39,14 @@ module.exports = {
       return ".jpg";
     }else if(contentType == "image/png"){
       return ".png";
+    }else if(contentType == "image/gif"){
+      return ".gif";
     }
-  } 
+  },
+
+  generateSlug: function(string) {
+    return "slugerized_"+string.substring(0,string.indexOf("."));
+  }
+
+
 }

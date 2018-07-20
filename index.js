@@ -26,6 +26,7 @@
  * 
  */
 
+let rscPath  = __dirname +'/resources';
 
 let app;      // reference to toroback
 let log;      // logger (toroback's child)
@@ -60,6 +61,9 @@ class Multimedia {
         this.services.transcoder = new Transcoder(app, options.transcoder);
       }
     }
+
+    let ImageEditor = require('./imageEditor.js');
+    this.services.editor = new ImageEditor(app, this.options.editor);
     // check for at least one service setup
     // if ( Object.keys(this.services).length == 0 ) {
     //   throw new Error('Multimedia: at least one module needs to be configured.');
@@ -86,6 +90,17 @@ class Multimedia {
           resolve( );
         })
         .catch(reject)
+    });
+  }
+
+   /**
+   * Inicializa los modelos del módulo
+   * @return {Promise} Una promesa
+   */
+  static init(){
+    return new Promise( (resolve, reject) => {
+      app.db.setModel('tb.multimedia-files',rscPath + '/tb.multimedia-files');
+      resolve();
     });
   }
 
@@ -151,53 +166,22 @@ class Multimedia {
    * @return {Promise<Object>} Una promesa con el resultado
    */
   editImage(input, output, image){
-    return new Promise( (resolve, reject) => {
-      let ImageEditor = require('./imageEditor.js');
-      let imageEditor = new ImageEditor(App, this.options ? this.options.editor: undefined);
-      imageEditor.edit(input, image, output)
-        .then(resolve)
-        .catch(reject);
-    });
+    return this.services.editor.edit(input, image, output)
   }
 
-  upload(payload){
-    return new Promise( (resolve, reject) => {
-      this.getReferenceConfig(payload.reference)
-        .then(refConfig => {
-          var serviceObject = App.Storage.toServiceObject({reference: refConfig.storageReference, path: payload.file.originalname});
-          if(serviceObject){
-            var uploadPayload = Object.assign({}, serviceObject);
-            uploadPayload.file = payload.file;
-            uploadPayload.public = true;
-
-            var Storage = new App.Storage(serviceObject.service);
-            Storage.uploadFile(uploadPayload) 
-              .then(res =>{
-                console.log("original image: " +JSON.stringify(res));
-                //TODO: Acá se guardaría el resultado de la subida
-                return Promise.resolve(res);
-              })
-              .then(res =>{
-                var output = Object.assign({public: true}, serviceObject);
-                return this.editImage({file: payload.file}, output, {crop: "rounded", resize:["l", "m"]} )
-              })
-              .then(resolve)
-              .catch(reject);
-          }
-        })
-        .catch(reject);
-    });
+  upload(payload){ 
+    return this.services.editor.upload(payload)
   }
 
-  getReferenceConfig(reference){
-    return new Promise( (resolve, reject) => {
-      if(this.options.references && this.options.references[reference]){
-        resolve(this.options.references[reference]);
-      }else{
-        reject("reference not exists "+reference);
-      }
-    });
-  }
+  // getReferenceConfig(reference){
+  //   return new Promise( (resolve, reject) => {
+  //     if(this.options.editor && this.options.editor.references && this.options.editor.references[reference]){
+  //       resolve(this.options.editor.references[reference]);
+  //     }else{
+  //       reject("reference not exists "+reference);
+  //     }
+  //   });
+  // }
   
 }
 
