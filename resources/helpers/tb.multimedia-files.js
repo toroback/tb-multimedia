@@ -50,9 +50,9 @@ function removeFiles(doc){
     if(doc.path) paths.push(doc.path);
     //Se añaden los paths de los distintos tamaños
     if(doc.sizes){
-      for(var i=0; i<doc.sizes.lenth; i++){
-        var mediaFile = doc["s_"+doc.sizes[i]];
-        if(mediaFile) paths.push[mediaFile.path];
+      for(var i=0; i<doc.sizes.length; i++){
+        var mediaFile = doc.get("s_"+doc.sizes[i]);
+        if(mediaFile) paths.push(mediaFile.path);
       }
     }
 

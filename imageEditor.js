@@ -114,6 +114,8 @@ class ImageEditor{
       let fileName = payload.path ? path.basename(payload.path) : file.originalname;
       let pathPrefix   = payload.path ? path.dirname(payload.path) + "/" : undefined;
       let isPublic = payload.public != undefined ? payload.public == true : true;
+
+      var Storage;
       //En primer lugar se obtiene la configuracion de la referencia y el slug del nombre del archivo.
       Promise.all([
           this.getReferenceConfig(payload.reference),
@@ -139,7 +141,7 @@ class ImageEditor{
           upload.path = path.join(serviceObject.path, slug + (utils.extensionForContentType(file.mimetype) || ""));
 
           // log.debug("Storage Upload payload" +  JSON.stringify(upload));
-          var Storage = new app.Storage(serviceObject.service);
+          Storage = new app.Storage(serviceObject.service);
           return Storage.uploadFile(upload) 
           
         })
@@ -165,7 +167,10 @@ class ImageEditor{
           return multimediaFile.save();
         })
         .then(doc =>{
-           log.debug("Media file saved");
+          return Storage.setFileMetadata({container: doc.container, path: doc.path, metadata: {contentType:doc.mime,  metadata: {_id: doc._id, sizeTag: "original", collection: 'tb.multimedia-files'}} });
+        })
+        .then(doc =>{
+          log.debug("Media file saved");
           //Se realiza la transformacion
           var output = Object.assign({public: isPublic}, serviceObject);
           output.pathPrefix = serviceObject.path;
@@ -202,11 +207,27 @@ class ImageEditor{
               }
             }
           }
-          if(avSizes.length) multimediaFile.set('sizes', avSizes);
+          if(avSizes.length) multimediaFile.sizes = avSizes;
          
           return multimediaFile.save();
         })
-        .then(resolve)
+        .then(doc =>{
+          //Se setean los metadatos a los sub archivos
+          var prom = [];
+          
+          if(multimediaFile.sizes){
+            for(var i=0; i<multimediaFile.sizes.length; i++){
+              var sizeKey = multimediaFile.sizes[i]; 
+              var mediaFile = multimediaFile.get("s_"+sizeKey);
+              if(mediaFile && mediaFile.path){ 
+                var metadata = { metadata: {_id: multimediaFile._id, sizeTag: sizeKey, collection: 'tb.multimedia-files'}}; 
+                prom.push(Storage.setFileMetadata({container: multimediaFile.container, path: mediaFile.path, metadata: metadata}).catch(err => Promise.resolve()));
+              }
+            }
+          }
+          return Promise.all(prom);
+        })
+        .then(res => resolve(multimediaFile))
         .catch(reject);
     });
   }
