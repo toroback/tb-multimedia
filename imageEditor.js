@@ -196,7 +196,7 @@ class ImageEditor{
               for(var j = 0; j < images.length; j++ ){
                 var subfile = images[j];
                 if(subfile){
-                  //TODO: Por ahora se establece las dimensiones en funciona la que nos pidieron, hay que buscar la manera de extraerla del documento
+                  //TODO: Por ahora se establece las dimensiones en funcion a la que nos pidieron, hay que buscar la manera de extraerla del documento
                   let sizeSpec = sizesSpec[subfile.size];
                   let mediaFile = new SubMediaFile({ path: subfile.path, url: subfile.url, w: sizeSpec.w, h: sizeSpec.h});
                   //Se asocia un nuevo media file por cada tamaño con el key 's_<tamaño>'
@@ -663,7 +663,7 @@ function performResize(pathOrig, pathDest, sizes, force = false, namePrefix){
           
           var destName = lowerCaseKey+ext;
           if(namePrefix) destName = namePrefix +"_"+destName;
-          let prom = resize(pathOrig, pathDest+"/"+destName, width, height)
+          let prom = resize(pathOrig, pathDest, destName, width, height, force)
                       .then(path => {return {path: path, size: size}});
           promises.push(prom);
         }
@@ -693,21 +693,43 @@ function extractSizes(string){
  * @private
  */
 //http://www.imagemagick.org/Usage/resize/ para mas detalles sobre la funcion y las opciones
-function resize(pathOrig, pathDest, width , height, force ){
+function resize(pathOrig, destDir, fileName, width , height, force ){
   return new Promise(function(resolve, reject){
-    // let gmTask = im(pathOrig);
-    // if(force){
-    //   gmTask.resize(width, height, "!");
-    // }else{
-      // gmTask.resize(width, height);
-    // }
-     log.debug("Resize to "+ width+"x"+height);
-    gm(pathOrig)
-      .resize(width, height)
-      .write(pathDest, function (err) {
-      if (err) reject(err);
-      else resolve(pathDest);
-    });
+
+    var pathDest = destDir + "/" + fileName;
+   
+    log.debug("Resize to "+ width+"x"+height + " - "+force+ " - "+fileName);
+
+    let resizeTask = gm(pathOrig).resize(width, height);
+ 
+    if(force){
+      var ext = path.extname(fileName);
+      let isJPG = ext == ".jpg";
+      
+      Promise.all([
+          gmWrite(resizeTask, destDir+"/tmp/"+fileName),
+          createBackground(destDir+"/tmp/resize"+fileName, width, height, isJPG ? 'white' :'transparent')
+        ])
+        .then(results =>{
+          let compositeTask =  gm(results[1])
+          compositeTask.composite(results[0]).gravity("Center") 
+          
+          return gmWrite(compositeTask, pathDest);
+        })
+        .then(res => resolve(pathDest))
+        .catch(reject);
+    }else{
+      gmWrite(resizeTask, pathDest)
+        .then(res => resolve(pathDest))
+        .catch(reject);
+    }
+
+      //  gm(pathOrig)
+      //   .resize(width, height)
+      //   .write(pathDest, function (err) {
+      //   if (err) reject(err);
+      //   else resolve(pathDest);
+      // });
   });
 }
 
