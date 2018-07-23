@@ -558,8 +558,8 @@ Un ejemplo es el siguiente:
 
 | Clave | Tipo | Opcional   | Descripción  |
 |---|---|:---:|---|
-|reference|String|X|Referencia a una ubicación. (Para más información ver "Uso de Referencias" del modulo Storage)|
-|public|Boolean|X|Flag que indica si el contenedor va a ser público. Por defecto es false.|
+|reference|String|X|Referencia a la ubicación y a las transformaciones que se van a aplicar. (Para más información ver "Uso de Referencias" del modulo Storage)|
+|public|Boolean|X|Flag que indica si el archivo va a ser público. Por defecto es false.|
 
 **Parámetros Multipart:**
 

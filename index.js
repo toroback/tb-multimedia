@@ -49,7 +49,6 @@ class Multimedia {
     if (!app)
       throw new Error('Constructor: setup() needs to be called first');
 
-    log.info('new Multimedia');
     let options = _options || defaultOptions;
     this.options = options;
     this.services = { };

@@ -45,6 +45,7 @@ class ImageEditor{
   constructor(_app, options){
     app = _app;      // reference to toroback
     log = _app.log.child({module:'multimedia-imageEditor'});  // logger (toroback's child)
+    log.debug("Multimedia ImageEditor instance");
     this.options = options || defaultOptions;
     this.readCustomSizes();
   }
@@ -495,8 +496,8 @@ function optimize(imagePath, destPath, configOptions){
 
 /**
  * Devuelve el servicio configurado para optimizar imágenes o "local" si no hay ninguno
- * @param  {[type]} configOptions [description]
- * @return {[type]}               [description]
+ * @param  {Object} configOptions Objeto con las configuraciones disponibles del editor
+ * @return {String}               El servicio configurado para optimizar
  */
 function getOptimizationService(configOptions){
   var service;

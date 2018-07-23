@@ -12,6 +12,8 @@ let log;
 function setupRoutes(App){
   log = App.log.child({module:'multimediaRoute'});
 
+  log.debug("Setup routes multimedia");
+
   router.use( (req, res, next) => {
     req._ctx['service']  = "multimedia";
     req._ctx['resource']  = req.query.service;
