@@ -111,7 +111,7 @@ class ImageEditor{
       log.debug("Multimedia Upload payload" +  JSON.stringify(payload));
       let file = payload.file;
       //Variables completadas en las respuestas de las promesas
-      let refConfig, serviceObject, originalUploadedFile, slug, multimediaFile, fileSize; 
+      let refConfig, serviceObject, originalUploadedFile, slugParts, multimediaFile, fileSize; 
       let fileName = payload.path ? path.basename(payload.path) : file.originalname;
       let pathPrefix   = payload.path ? path.dirname(payload.path) + "/" : undefined;
       let isPublic = payload.public != undefined ? payload.public == true : true;
@@ -120,26 +120,32 @@ class ImageEditor{
       //En primer lugar se obtiene la configuracion de la referencia y el slug del nombre del archivo.
       Promise.all([
           this.getReferenceConfig(payload.reference),
-          buildSlug(fileName.substring(0, fileName.lastIndexOf("."))),
+          // buildSlug(fileName),
           getFileSize(file.path)
         ])
         .then(res =>{
           log.debug("Loaded start data");
           refConfig = res[0];
-          slug = res[1];
-          fileSize = res[2];
+          // slugParts = res[1];
+          fileSize = res[1];
           
           //Se realiza la subida del archivo
           serviceObject = app.Storage.toServiceObject({reference: refConfig.storageReference, path: pathPrefix || ""});
-          
+          console.log("service object "+JSON.stringify(serviceObject));
           if(!serviceObject)  throw app.err.notFound("Storage reference not found");
           
+          return buildSlug(path.join(serviceObject.path,fileName));
+        })
+        .then(res =>{
+          slugParts = res;
+
           var upload = Object.assign({}, serviceObject);
           upload.file = file;
           upload.public = isPublic;
 
           //Se establece la ubicacion final del archivo para la subida, uniendo el path que devuelve el service object junto al nombre del archivo y la extension;
-          upload.path = path.join(serviceObject.path, slug + (utils.extensionForContentType(file.mimetype) || ""));
+          // upload.path = path.join(serviceObject.path, slugParts.slug + (utils.extensionForContentType(file.mimetype) || ""));
+          upload.path = path.join(slugParts.slugPath + (utils.extensionForContentType(file.mimetype) || ""));
 
           // log.debug("Storage Upload payload" +  JSON.stringify(upload));
           Storage = new app.Storage(serviceObject.service);
@@ -158,7 +164,8 @@ class ImageEditor{
             public: originalUploadedFile.public,
             path: originalUploadedFile.path,
             url: originalUploadedFile.url,
-            slug: slug,
+            slug: slugParts.slug,
+            slugPath: slugParts.slugPath,
             mime: file.mimetype,
             w: fileSize.width,
             h: fileSize.height,
@@ -175,11 +182,12 @@ class ImageEditor{
           log.debug("Media metadata set");
           //Se realiza la transformacion
           var output = Object.assign({public: isPublic}, serviceObject);
-          output.pathPrefix = serviceObject.path;
+          output.pathPrefix = path.dirname(slugParts.slugPath)+"/"; //se saca el ultimo segmento del slugPath, que sería el prefijo del nombre del archivo, que se pasa en namePrefix
+          // output.pathPrefix = serviceObject.path;
           
           var prom = refConfig.editOptions.map( e => {
             var editOptions = Object.assign({}, e);
-            editOptions.namePrefix = slug;
+            editOptions.namePrefix = slugParts.slug;
             //Si no se especifica la optimizacion en las opciones, por defecto hacemos que se optimice
             if(editOptions.optimize == undefined) editOptions.optimize = true;
             return this.edit({file: file}, editOptions, output).catch(err => {return Promise.resolve()});
@@ -248,6 +256,7 @@ class ImageEditor{
       }
     });
   }
+
 }
 
 /**
@@ -748,48 +757,58 @@ function getExtension(filePath){
   return path.extname(filePath);
 }
 
-// builds a slug for a multimedia file from the file name
-// name: file name to build slug from. path and extensions are removed if passed in name
-// return: slug string
-//
-// makes sure slug doesn't exist in DB already. 
-// auto-increases counter in slug if needed
-function buildSlug( name ) {
+
+function buildSlug( filePath ) {
   return new Promise( (resolve, reject) => {
     let MMFile = app.db.model( 'tb.multimedia-files' );
     let regexp;
-    let slug;
+    // let slug;
 
-    // parse from path (remove paths and extension), if not undefined
-    slug = name ? name.split('/').pop( ).split('.')[0] : '';
-    // clean up
-    if ( slug ) {
-      slug = removeDiacritics( name ).toLowerCase( )  // no diacritics, lowercase
+    let pathExt = filePath ? getExtension(filePath): undefined; //Obtengo extension
+    let slugPath = filePath && pathExt ? filePath.substring(0, filePath.lastIndexOf(pathExt)): filePath; //Saco extension del path que nos pasan
+
+    if(slugPath){
+      let slugParts = slugPath.split(path.sep); //Obtengo las partes del path
+
+      //A cada parte se le limpian los diacritics
+      let cleanedSlugParts = slugParts.map( slugPart => {
+        return removeDiacritics( slugPart ).toLowerCase( )  // no diacritics, lowercase
                 .replace(/[^A-Za-z0-9\s\-\_\/]/g, '')  // keep only characters in range
-                .replace(/[\s\-\_\/]+/g, '-'); // remove dash duplicity
+                .replace(/[\s\-\_\/]+/g, '-');
+      });
+      cleanedSlugParts = cleanedSlugParts.filter(item => {
+        return item != undefined && item.length;
+      });
+      slugPath = cleanedSlugParts.join(path.sep);
+
     }
-    // it could be empty here after cleaning up
-    slug = slug || (Math.random() + Number.EPSILON).toString(36).substr(2, 16); // + epsilon, avoid empty string. already lowercase
+
+    slugPath = slugPath || (Math.random() + Number.EPSILON).toString(36).substr(2, 16); // + epsilon, avoid empty string. already lowercase
+                   
+    slugPath = path.normalize(slugPath);
                    
     // match '<slug>' or '<slug>-<counter>' slugs in DB
-    regex = new RegExp( '^' + slug + '(-\\d+$|$)' ); // all already lowercase (double slash on string building. single slash on regex \d)
+    regex = new RegExp( '^' + slugPath + '(-\\d+$|$)' ); // all already lowercase (double slash on string building. single slash on regex \d)
 
     // make sure it doesn't exist in DB already. find them all
-    MMFile.find( { 'slug': regex }, { 'slug': 1 } )    
+    MMFile.find( { 'slugPath': regex }, { 'slugPath': 1 } )    
       .then( mmFiles => {
         // if exact same string exists, we need to create a new slug
-        if ( mmFiles.find( e => e.slug == slug ) ) {
+        if ( mmFiles.find( e => e.slugPath == slugPath ) ) {
           // find largest counter, and increment by 1 (from format: <slug>-<counter>)
-          let num = mmFiles.map( e => Number( e.slug.split('-').pop( ) ) || 0 ) // add 0 to array if NaN
+          let num = mmFiles.map( e => Number( e.slugPath.split('-').pop( ) ) || 0 ) // add 0 to array if NaN
                            .sort( (a,b) => (a - b)).pop( ) + 1;
-          slug = slug + '-' + num;
+          slugPath = slugPath + '-' + num;
         } // else: no exact match, we can return slug as it is
-        return slug;
+        return slugPath;
       })
-      .then(resolve)
+      .then(cleanSlugPath => {
+        resolve({slugPath: cleanSlugPath, slug: path.basename(cleanSlugPath)})
+      })
       .catch(reject);
   });
 }
 /// END TEST
+/// 
 
 module.exports = ImageEditor;

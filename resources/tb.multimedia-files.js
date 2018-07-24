@@ -17,7 +17,8 @@ let schema  = new Schema ({
   public:     { type: Boolean, required: true, default: false }, // is publicly accessible?
   // pathPrefix: { type: String, required: true },   // prefijo del path de todos
 
-  slug:       { type: String, required: true},  // 
+  slug:       { type: String, required: true },  // 
+  slugPath:   { type: String, required: true },  // 
 
   //Specific for original file
   path:       { type: String },  // path to file, relative to bucket. required if service!=url
@@ -39,7 +40,7 @@ let schema  = new Schema ({
   timestamps: { createdAt: 'cDate', updatedAt: 'uDate' }
 });
 
-schema.index({ 'slug': 1 }, { 'unique': true });  // unique identifier for url prefix
+schema.index({ 'slugPath': 1 }, { 'unique': true });  // unique identifier for url prefix
 
 schema.pre('remove', function(next, ctx) {  // this can NOT be an arrow function
   console.log('========>>> HOOK: pre remove (model tb.multimedia-files)');
