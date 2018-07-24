@@ -1,6 +1,6 @@
 {
   "name": "tb-multimedia",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Multimedia module to extend ToroBack functionality",
   "main": "index.js",
   "scripts": {
