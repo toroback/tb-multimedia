@@ -1,6 +1,6 @@
 let fs  = require('fs-extra');
 var gm = require('gm');
-var im = gm.subClass({imageMagick: true});
+// var im = gm.subClass({imageMagick: true});
 let path = require('path');
 let utils = require('./utils');
 let removeDiacritics = require('diacritics').remove;
@@ -168,10 +168,11 @@ class ImageEditor{
           return multimediaFile.save();
         })
         .then(doc =>{
-          return Storage.setFileMetadata({container: doc.container, path: doc.path, metadata: {contentType:doc.mime,  metadata: {_id: doc._id, sizeTag: "original", collection: 'tb.multimedia-files'}} });
+          log.debug("Media file saved");
+          return Storage.setFileMetadata({container: doc.container, path: doc.path, metadata: { metadata: {_id: doc._id, sizeTag: "original", collection: 'tb.multimedia-files'}} });
         })
         .then(doc =>{
-          log.debug("Media file saved");
+          log.debug("Media metadata set");
           //Se realiza la transformacion
           var output = Object.assign({public: isPublic}, serviceObject);
           output.pathPrefix = serviceObject.path;
@@ -187,6 +188,7 @@ class ImageEditor{
           return Promise.all(prom);
         })
         .then( res=>{
+          log.debug("Transformations done");
           //res = [ {images: [{image1, image2 }]}, {images:[image1, imageX]} ,...]
           //Acá se guardan las imágenes transformadas
           let SubMediaFile = mongoose.model('MediaFile', submodels.mediaFile);
@@ -213,6 +215,7 @@ class ImageEditor{
           return multimediaFile.save();
         })
         .then(doc =>{
+          log.debug("Transformations saved");
           //Se setean los metadatos a los sub archivos
           var prom = [];
           
@@ -228,7 +231,10 @@ class ImageEditor{
           }
           return Promise.all(prom);
         })
-        .then(res => resolve(multimediaFile))
+        .then(res => {
+          log.debug("Transformations metadata set");
+          resolve(multimediaFile)
+        })
         .catch(reject);
     });
   }
@@ -502,7 +508,7 @@ function optimize(imagePath, destPath, configOptions){
 function getOptimizationService(configOptions){
   var service;
   Object.keys(configOptions).forEach( key => {
-    if(!service && configOptions[key].optimization){
+    if(!service && configOptions[key].optimization == true){
       service = key;
     }
   });
@@ -510,7 +516,7 @@ function getOptimizationService(configOptions){
 }
 
 /**
- * Optimización local usando ImageMagick
+ * Optimización con tinyPng
  * @param  {String} imagePath Path de la imagen a optimizar
  * @param  {String} destFile  Path donde se almacenará la imagen modificada
  * @param  {Object} serviceOptions  Opciones del servicio de TinyPNG
@@ -534,7 +540,7 @@ function tinyPngOptimize(imagePath, destFile, serviceOptions){
 }
 
 /**
- * Optimización local usando ImageMagick
+ * Optimización local usando GraphicsMagick
  * @param  {String} imagePath Path de la imagen a optimizar
  * @param  {String} destFile  Path donde se almacenará la imagen modificada
  * @return {Promise}          Promesa a la ubicacion de la imagen modificada
@@ -545,14 +551,18 @@ function localOptimization(imagePath, destFile){
     gm(imagePath).format(function(err, format){
       if(err) reject(err);
       else{
-        var optimizePromise;
+        var optimizeTask;
         format = format.toLowerCase();
         if(format == 'jpeg'){
-          optimizePromise = gmWrite(im(imagePath).samplingFactor(2,2).strip().quality(70).interlace("JPEG").define("jpeg:dct-method=float").colorspace("sRGB"), destFile)
+          log.debug("Compressing jpg");
+          optimizeTask = gm(imagePath).samplingFactor(2,2).noProfile().quality(70).interlace("Line").define("jpeg:dct-method=float");
+          // optimizeTask = im(imagePath).samplingFactor(2,2).strip().quality(70).interlace("JPEG").define("jpeg:dct-method=float").colorspace("sRGB");
         }else{
-          optimizePromise = gmWrite(gm(imagePath).strip(), destFile)
+          log.debug("Compressing png");
+          optimizeTask = gm(imagePath).noProfile();
+          // optimizeTask = im(imagePath).strip();
         }
-        optimizePromise.then(res => resolve(res)).catch(reject);
+        gmWrite(optimizeTask, destFile).then(resolve).catch(reject);
       }
     });
   });
@@ -655,7 +665,7 @@ function performResize(pathOrig, pathDest, sizes, force = false, namePrefix){
       
       let promises = [];
       sizes.forEach( size => {
-        let lowerCaseKey = size.toLocaleString();
+        let lowerCaseKey = size.toLowerCase();
         let sizeSpec = sizesSpec[lowerCaseKey];
         if(!sizeSpec) sizeSpec = extractSizes(lowerCaseKey);
         if(sizeSpec){
